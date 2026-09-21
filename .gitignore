@@ -1,0 +1,19 @@
+# ==========================================
+# eDHS - Patch / Update Only Mode
+# ละเว้นทั้งระบบ เอาขึ้นเฉพาะโฟลเดอร์อัปเดต (eDHS Update)
+# ==========================================
+
+# 1. ละเว้นทุกโฟลเดอร์และทุกไฟล์ในระบบทั้งหมดก่อน
+/*
+
+# 2. ยกเว้น (อนุญาตให้นำขึ้น Git ได้เฉพาะที่กำหนด)
+!/eDHS Update/
+!/eDHS Update/**
+!/.gitignore
+!/GIT_PULL_AND_UPDATE_PLAN.md
+
+# 3. กฎความปลอดภัยภายใน eDHS Update (ห้ามเอาคอนฟิกและฐานข้อมูลขึ้นเด็ดขาด)
+eDHS Update/**/config.php
+eDHS Update/**/config.json
+eDHS Update/**/*.sql
+eDHS Update/**/*.log

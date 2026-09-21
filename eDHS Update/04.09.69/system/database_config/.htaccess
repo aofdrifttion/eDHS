@@ -1,0 +1,4 @@
+# ป้องกันการเข้าถึงไฟล์ config.json ผ่าน Browser โดยตรง
+<Files "config.json">
+    Require all denied
+</Files>

@@ -1,0 +1,442 @@
+{
+  "current_version": "05.09.69",
+  "last_updated": "2026-09-05",
+  "releases": [
+    {
+      "version": "05.09.69",
+      "date": "2026-09-05",
+      "title": "ระบบตั้งค่าลูกหนี้ตามข้อตกลงอัตราค่าบริการจังหวัดร้อยเอ็ด (ผัง .203 และ .102.201), กำหนดเดือนเริ่มต้น และคุ้มครองเคสไตเทียม",
+      "type": "minor",
+      "badge": "bg-primary",
+      "changes": [
+        {
+          "category": "feature",
+          "tag": "ฟีเจอร์ใหม่",
+          "color": "success",
+          "icon": "bx-calculator",
+          "description": "ระบบตั้งค่าลูกหนี้ตามข้อตกลงอัตราค่าบริการจังหวัดร้อยเอ็ด (รูปแบบ A ปรับแต่งยอดเงินได้): รองรับการตั้งค่าอัตราเรียกเก็บทั้งผัง 1102050101.203 (ในสังกัด สธ.) และผัง 1102050102.201 (นอกสังกัด สธ. เช่น รพ.ค่ายฯ / เทศบาล ๑-๒) โดยสามารถปรับแต่งยอดเงินได้ทุกประเภทบริการ เพื่อความยืดหยุ่นในอนาคต"
+        },
+        {
+          "category": "feature",
+          "tag": "ฟีเจอร์ใหม่",
+          "color": "success",
+          "icon": "bx-calendar-check",
+          "description": "ระบบกำหนดเดือนเริ่มต้นที่มีผลบังคับใช้ (Effective Start Month): กักกันข้อมูลบัญชีย้อนหลัง (Historical Ledger Integrity) โดยสามารถระบุเดือนเริ่มต้นที่ต้องการบังคับใช้ เช่น 10-2568 หรือทุกเดือน ข้อมูลเดือนก่อนหน้านี้จะถูกแช่แข็งไว้ตามยอดจริงเดิม 100%"
+        },
+        {
+          "category": "feature",
+          "tag": "ฟีเจอร์ใหม่",
+          "color": "success",
+          "icon": "bx-shield-plus",
+          "description": "ระบบเพดานจ่ายตามจริงไม่เกิน 700 บาท ผัง 1102050102.201 (LEAST Function): กรณีอุบัติเหตุ/ฉุกเฉินนอกสังกัด สธ. หากยอดจริงต่ำกว่า 700 บาท (เช่น 90 หรือ 595 บาท) จะคิดตามยอดจริง ไม่ถูกปัดขึ้น หากเกิน 700 บาทจะจำกัดภาระหนี้ไว้ไม่เกิน 700 บาทตามข้อตกลงจังหวัด"
+        },
+        {
+          "category": "fix",
+          "tag": "คุ้มครองรายได้",
+          "color": "warning",
+          "icon": "bx-shield-quarter",
+          "description": "ระบบคุ้มครองผู้ป่วยฟอกไตเทียม (_KIDNEY Protection): ป้องกันเคสฟอกไตในผัง .203 ไม่ให้ถูกปรับเป็นยอดเหมาจ่าย 175 บาท โดยคงยอดค่าบริการตามจริง (1,500 - 2,000+ บาท) ป้องกันการสูญเสียรายได้ของโรงพยาบาล"
+        },
+        {
+          "category": "fix",
+          "tag": "ปรับปรุงความถูกต้อง",
+          "color": "danger",
+          "icon": "bx-x-circle",
+          "description": "ยกเลิกการปรับภาระหนี้ 175 บาทในส่วนของผู้ป่วยใน (IPD) ออกจากระบบทั้งหมด เนื่องจากข้อตกลงอัตราค่าบริการเป็นของผังผู้ป่วยนอก OPD เท่านั้น"
+        }
+      ]
+    },
+    {
+      "version": "04.09.69",
+      "date": "2026-09-04",
+      "title": "เพิ่มการตั้งค่ารหัสสิทธิการรักษา (pttype) ให้ CR-walkin และแยกเคส CR-walkin กับ CR-AE ด้วยสิทธิการรักษา",
+      "type": "minor",
+      "badge": "bg-primary",
+      "changes": [
+        {
+          "category": "feature",
+          "tag": "ฟีเจอร์ใหม่",
+          "color": "success",
+          "icon": "bx-calendar-event",
+          "description": "ระบบขอบเขตเดือนของกลุ่มย่อย (Subgroup Effective Month System): ป้องกันการกระทบยอดเงินย้อนหลัง (Retroactive Mutation Prevention) ของงวดบัญชีเดิมเมื่อมีการเพิ่มหรือปรับปรุงกลุ่มย่อย CR และ SSS ในเดือนใหม่ โดยสามารถกำหนดเดือนเริ่มต้น (effective_start_month) และเดือนสิ้นสุด (effective_end_month) ของแต่ละกลุ่มย่อยได้อย่างอิสระ พร้อมคงยอดเดิมของเดือนก่อนหน้า 100%"
+        },
+        {
+          "category": "feature",
+          "tag": "ฟีเจอร์ใหม่",
+          "color": "success",
+          "icon": "bx-id-card",
+          "description": "เพิ่มการตั้งค่ารหัสสิทธิการรักษา (pttype) และคำสำคัญชื่อสิทธิ (pttypename) ให้กับกลุ่มย่อย CR-walkin พร้อม Dropdown เลือกด่วนจากสิทธิการรักษา OPD ในระบบ ช่วยให้กำหนดสิทธิ Walk-in (เช่น สิทธิ 23) ได้อย่างยืดหยุ่นและแม่นยำ"
+        },
+        {
+          "category": "improve",
+          "tag": "ปรับปรุง",
+          "color": "info",
+          "icon": "bx-git-merge",
+          "description": "ระบบแยกเคสระหว่าง CR-walkin และ CR-AE ด้วยสิทธิการรักษา (pttype Isolation & Separation): ป้องกันเคสที่ลงทะเบียนสิทธิ Walk-in ไม่ให้ถูกดึงเข้ากลุ่ม CR-AE แม้จะรับบริการที่ห้องฉุกเฉิน ER และคุ้มครองเคสสิทธิฉุกเฉินไม่ให้เข้ากลุ่ม CR-walkin พร้อมคงระบบตรวจจับอัตโนมัติ 100% จากห้อง ER และเกณฑ์ Cross Region กรณีผู้ใช้ไม่ระบุสิทธิ"
+        },
+        {
+          "category": "fix",
+          "tag": "แก้ไขข้อผิดพลาด",
+          "color": "danger",
+          "icon": "bx-check-shield",
+          "description": "Deep Code Audit & Hardening ขอบเขตเดือนกลุ่มย่อย (Subgroup Effective Month System): ปรับปรุงระบบตรวจสอบเดือนให้รองรับทั้งสตริงและ Array ช่วงวันที่ (Date Range) ในทุก Action ประมวลผล ดักจับค่า 'ALL' และรูปแบบเครื่องหมายคั่น '/' อย่างสมบูรณ์ 100%, ปลดล็อกการตรวจจับ CR-AE และ CR-เกิดสิทธิทันที ฝั่ง IPD, รองรับ Impact Preview ฝั่ง IPD และเพิ่มช่องตั้งค่าเดือนบังคับใช้ครบทั้ง 8 กลุ่มย่อย OPD และ 4 กลุ่มย่อย IPD ในหน้าต่างตั้งค่า"
+        },
+        {
+          "category": "feature",
+          "tag": "ฟีเจอร์ใหม่",
+          "color": "success",
+          "icon": "bx-book-bookmark",
+          "description": "คู่มือการใช้งานระบบ eDHS ฉบับใหม่ (Interactive Standalone System Manual): สร้างคู่มือในรูปแบบ HTML สมบูรณ์แบบที่ eDHS/manual/index.html ใช้งานได้ทั้ง Offline ในเครื่องและผ่านเครือข่าย มีสารบัญแถบข้าง ลิงก์ตรงสู่หน้างานจริงทุกเมนู พร้อมแผนผัง Workflow ขั้นตอนการปฏิบัติงาน 6 หมวดหมู่หลัก และปุ่มเปิดดูคู่มือแบบเต็มจอในแท็บใหม่"
+        }
+      ]
+    },
+    {
+      "version": "03.09.69",
+      "date": "2026-09-03",
+      "title": "ยกระดับความสวยงามทั้งระบบ (UI Modernization) และปรับปรุงกฎจำแนก CR-walkin Cross Region",
+      "type": "major",
+      "badge": "bg-primary",
+      "changes": [
+        {
+          "category": "feature",
+          "tag": "ฟีเจอร์ใหม่",
+          "color": "success",
+          "icon": "bx-lock-alt",
+          "description": "ระบบล็อกช่องสีเหลืองและปิด Checkbox เมื่อเลือกกลุ่มย่อยในหน้าลูกหนี้รายตัว (Data Protection & Subgroup Lockdown): ปิดการแก้ไขยอดชดเชย เลขที่บิล วันที่ และปิดการติ๊กเลือก Checkbox ทุกตัวเมื่ออยู่ในมุมมองกลุ่มย่อย ป้องกันการแก้ไขข้อมูลผิดผัง โดยอนุญาตให้ลงข้อมูลและติ๊กเลือกทำรายการได้เฉพาะแท็บ 'ทั้งหมด' เท่านั้น"
+        },
+        {
+          "category": "improve",
+          "tag": "ปรับปรุง",
+          "color": "info",
+          "icon": "bx-calculator",
+          "description": "ปรับปรุงการจัดสรรยอดค่าบริการใน Modal รายละเอียดคนไข้ (CR Breakdown Debt Allocator): คำนวณและเกลี่ยยอดหนี้คงเหลือจริงให้กับกลุ่มย่อยระดับบริการที่ไม่มีราคาผูก (เช่น CR-walkin, CR-AE) ทำให้ปุ่ม Mini Pills, การ์ดสรุปยอดด้านบน, และตารางรายการแสดงยอดถูกต้องและสมดุลตรงกันทุกจุด"
+        },
+        {
+          "category": "feature",
+          "tag": "ฟีเจอร์ใหม่",
+          "color": "success",
+          "icon": "bx-layer",
+          "description": "ระบบแยกส่วนการแสดงผลกลุ่มย่อย CR (Multi-Subgroup Isolation Engine): แยกยอดเงินและซ่อน Badge ของกลุ่มย่อยอื่นเมื่อเลือกแท็บเฉพาะกลุ่ม ป้องกันยอดเบิ้ล (Double Counting) พร้อมคงการแสดงผลทุกกลุ่มย่อยบนแท็บรวมทั้งหมด และเพิ่ม Interactive Mini Pills Bar บน Modal รายละเอียดคนไข้ เพื่อสลับดูเฉพาะกลุ่มย่อยหรือดูทุกรายการพร้อมกันได้ทันที"
+        },
+        {
+          "category": "feature",
+          "tag": "ฟีเจอร์ใหม่",
+          "color": "success",
+          "icon": "bx-gift",
+          "description": "ระบบจำแนกลูกหนี้ CR-walkin ตามเกณฑ์ 3 ระดับ ตรวจจับเฉพาะผู้ป่วยต่างจังหวัด/ต่างเขต (Cross Region) เพื่อดึงเงินจากส่วนกลางเข้าผัง 1102050101.216_CR_WALKIN พร้อมคุ้มครองผู้ป่วยใน CUP (ผัง .201) และต่าง CUP ในจังหวัด (ผัง .203 นค.) ไม่ให้ยอดสูญหาย"
+        },
+        {
+          "category": "feature",
+          "tag": "ฟีเจอร์ใหม่",
+          "color": "success",
+          "icon": "bx-gift",
+          "description": "ระบบจำแนกลูกหนี้ CR-AE สำหรับเคสฉุกเฉินข้ามจังหวัด (Cross Region Emergency) คัดกรองเฉพาะผู้ป่วยฉุกเฉิน/อุบัติเหตุที่มีสถานพยาบาลหลักอยู่ต่างจังหวัด/ต่างเขตเข้าผัง 1102050101.216_CR_AE เพื่อดึงเงินจากส่วนกลาง พร้อมคงเงื่อนไขสิทธิ/แผนกเดิมและคุ้มครองเคสในจังหวัด"
+        },
+        {
+          "category": "feature",
+          "tag": "ฟีเจอร์ใหม่",
+          "color": "success",
+          "icon": "bx-gift",
+          "description": "ระบบตรวจจับรหัสจังหวัดหน่วยบริการอัตโนมัติจากฐาน HOSxP (Hospital Auto-Province Detection) พร้อมปุ่มกดตรวจจับแบบ Real-time บนหน้าต่างตั้งค่ากลุ่มย่อย CR"
+        },
+        {
+          "category": "improve",
+          "tag": "ปรับปรุง",
+          "color": "info",
+          "icon": "bx-wrench",
+          "description": "ปรับโฉมหน้าต่างตั้งค่ากลุ่มย่อย CR-walkin เพิ่มการ์ดสรุปเกณฑ์ 3 ระดับ พร้อมสวิตช์ตรวจจับ Cross Region และสวิตช์ตรวจจับรหัส ADP 'WALKIN' ตามเกณฑ์ สปสช."
+        },
+        {
+          "category": "improve",
+          "tag": "ปรับปรุง",
+          "color": "info",
+          "icon": "bx-wrench",
+          "description": "ปรับปรุงหน้าต่าง Modal ทั่วทั้งระบบ โดยเฉพาะหน้าต่างแก้ไขข้อมูลส่วนตัว (Edit Profile Modal) สไตล์ Modern Card มน 20px, ไอคอน Header Badge, แยก 3 การ์ดย่อย พร้อมปุ่มลูกตาเปิด-ปิดรหัสผ่าน และแก้ปัญหาปุ่มปิดล้นขอบ"
+        },
+        {
+          "category": "improve",
+          "tag": "ปรับปรุง",
+          "color": "info",
+          "icon": "bx-wrench",
+          "description": "ยกเครื่องระบบสำรองข้อมูล (backup/index.php) สไตล์พรีเมียม Noto Sans Thai, 4 แผงสถิติ KPI, Hero Action Banner สำรองข้อมูลทันที, ตารางค้นหาไฟล์แบบ Real-time และ SweetAlert2 Confirmation"
+        },
+        {
+          "category": "improve",
+          "tag": "ปรับปรุง",
+          "color": "info",
+          "icon": "bx-wrench",
+          "description": "ยกระดับหน้าตั้งค่าฐานข้อมูล (database_config) ใช้ฟอนต์ Noto Sans Thai, การ์ดแยก DB1/DB2, ข้อมูลโรงพยาบาล, สวิตช์ Line Notify สไตล์ iOS Toggle, ปุ่ม Show/Hide Password และทดสอบ Latency การเชื่อมต่อ"
+        },
+        {
+          "category": "improve",
+          "tag": "ปรับปรุง",
+          "color": "info",
+          "icon": "bx-wrench",
+          "description": "ปรับปรุงกล่องเลือกข้อมูลประจำเดือนในหน้านำเข้าลูกหนี้สิทธิ และนำเข้าลูกหนี้ EMS ให้เป็นการ์ดตัวกรอง Modern Filter Card มน 16px สวยงามสอดคล้องกับธีม eDHS ทั้งระบบ"
+        },
+        {
+          "category": "security",
+          "tag": "ความปลอดภัย",
+          "color": "warning",
+          "icon": "bx-shield",
+          "description": "เพิ่มระบบตรวจสอบสถานะเซสชัน (Session Safety) ป้องกัน Notice และข้อผิดพลาด Session Already Active ในไฟล์ update_profile.php, save_config.php และ backup/index.php"
+        }
+      ]
+    },
+    {
+      "version": "01-09-69",
+      "date": "2026-09-01",
+      "title": "ปรับปรุงระบบผังลูกหนี้จำลอง CR/SSS IPD-OPD และระบบทำความสะอาดรายงานประจำวัน",
+      "type": "major",
+      "badge": "bg-primary",
+      "changes": [
+        {
+          "category": "feature",
+          "tag": "ฟีเจอร์ใหม่",
+          "color": "success",
+          "icon": "bx-gift",
+          "description": "ระบบแสดงผลและดึงข้อมูลผังลูกหนี้จำลองอัตโนมัติ (Virtual Target Accounts Auto-Append) สำหรับ CR IPD (1102050101.217), SSS IPD (1102050101.310), CR OPD (1102050101.216) และ SSS OPD (1102050101.309)"
+        },
+        {
+          "category": "feature",
+          "tag": "ฟีเจอร์ใหม่",
+          "color": "success",
+          "icon": "bx-gift",
+          "description": "ระบบตรวจจับและแทรก Checkbox สิทธิจำลอง (.217, .310, .216, .309) ลงใน Dropdown สิทธิของหน้าตั้งลูกหนี้อัตโนมัติพร้อมเลือกเริ่มต้น (Checked) เมื่อมีการเปิดใช้งานระบบ CR/SSS"
+        },
+        {
+          "category": "improve",
+          "tag": "ปรับปรุง",
+          "color": "info",
+          "icon": "bx-wrench",
+          "description": "ระบบระงับแสดงผลแถวว่างเปล่าในรายงานลูกหนี้ประจำวัน (Empty Accounts Daily Suppression) ทั้ง OPD และ IPD ไม่แสดงแถวที่ยอดคงเหลือเป็น 0.00 ให้รายงานกระชับและถูกต้องตามหลักบัญชี"
+        },
+        {
+          "category": "improve",
+          "tag": "ปรับปรุง",
+          "color": "info",
+          "icon": "bx-wrench",
+          "description": "ปรับปรุงกลไกตัวช่วย CR & SSS Migration Helper ให้ตรวจสอบสถานะเปิด/ปิดผังแม่ (Parent Accounts) จากหน้าต่างตั้งค่า ป้องกันการตัดยอดจากผังที่ถูกปิดใช้งาน"
+        },
+        {
+          "category": "improve",
+          "tag": "ปรับปรุง",
+          "color": "info",
+          "icon": "bx-wrench",
+          "description": "ปรับปรุงการส่งพารามิเตอร์หน้าตั้งลูกหนี้ ให้ส่งสิทธิ rights=all เมื่อเลือกทุกสิทธิ เพิ่มประสิทธิภาพและความเร็วในการประมวลผล"
+        },
+        {
+          "category": "fix",
+          "tag": "แก้ไขข้อผิดพลาด",
+          "color": "danger",
+          "icon": "bx-bug",
+          "description": "แก้ไขปัญหาการค้นหาชื่อ-สกุล, HN, CID ในหน้านำเข้าลูกหนี้ EMS ไม่ให้แสดงรายการซ้ำซ้อน รวมข้อมูลผู้ป่วยที่มีหลาย Visit เข้าด้วยกันอย่างแม่นยำ"
+        },
+        {
+          "category": "fix",
+          "tag": "แก้ไขข้อผิดพลาด",
+          "color": "danger",
+          "icon": "bx-bug",
+          "description": "แก้ไขปัญหายอดรวมและผัง 1102050101.217 (CR IPD) ขาดหายไปจากหน้านำเข้าลูกหนี้และรายงาน PDF ใบหลัก/ใบรายวัน"
+        },
+        {
+          "category": "fix",
+          "tag": "แก้ไขข้อผิดพลาด",
+          "color": "danger",
+          "icon": "bx-bug",
+          "description": "แก้ไขปัญหาผัง 1102050101.203 แสดงจำนวน 0 รายและภาระหนี้ 0.00 บาทในรายงาน PDF ประจำวันแทบทุกวันจากการถูกโอนยอดเข้า CR-walkin"
+        }
+      ]
+    },
+    {
+      "version": "31.08.69",
+      "date": "2026-08-31",
+      "title": "ระบบตัดแยกค่ารักษาลูกหนี้บริการเฉพาะ (CR Splitting Engine) และปรับปรุงระบบลูกหนี้รอบด้าน",
+      "type": "major",
+      "badge": "bg-primary",
+      "changes": [
+        {
+          "category": "feature",
+          "tag": "ฟีเจอร์ใหม่",
+          "color": "success",
+          "icon": "bx-gift",
+          "description": "ระบบตัดแยกค่ารักษาลูกหนี้ CR อัตโนมัติ (Cross-Account Splitting Engine) แยก 8 กลุ่มย่อย OPD (ผัง 1102050101.216) และ 2 กลุ่มย่อย IPD (ผัง 1102050101.217) พร้อมคุ้มครองกลุ่มผู้ป่วยโรคไต (KIDNEY)"
+        },
+        {
+          "category": "feature",
+          "tag": "ฟีเจอร์ใหม่",
+          "color": "success",
+          "icon": "bx-gift",
+          "description": "หน้าต่างตั้งค่ากลุ่มย่อย CR สำหรับผู้ดูแลระบบ (CR Settings Admin Panel) ปรับแต่งเงื่อนไขกลุ่มย่อย, สวิตช์แยกเปิด/ปิด OPD-IPD อิสระ, เลือกเดือนที่เริ่มมีผล และสร้างกลุ่มย่อย Custom แบบไดนามิก"
+        },
+        {
+          "category": "feature",
+          "tag": "ฟีเจอร์ใหม่",
+          "color": "success",
+          "icon": "bx-gift",
+          "description": "หน้าต่างเจาะลึกรายการโอน CR รายบุคคล (Patient Breakdown Modal) ตรวจสอบรายการยา เวชภัณฑ์ ค่าบริการ และการจัดสรรยอดเงินระดับ Item/Visit ได้แบบ Real-time"
+        },
+        {
+          "category": "feature",
+          "tag": "ฟีเจอร์ใหม่",
+          "color": "success",
+          "icon": "bx-gift",
+          "description": "ระบบชุดแท็บนำทาง CR Subgroups บนหน้าต่างสรุปและตารางแจกแจงรายการลูกหนี้รายคน พร้อมคำนวณการ์ด KPI ยอดเงินรวม และส่งออก Excel แยกตามแท็บ"
+        },
+        {
+          "category": "feature",
+          "tag": "ฟีเจอร์ใหม่",
+          "color": "success",
+          "icon": "bx-gift",
+          "description": "ระบบจัดการรายชื่อผู้ลงนามท้ายรายงานลูกหนี้ (Report Signers Management) ปรับแต่งและบันทึกชื่อ-ตำแหน่งผู้จัดทำและผู้อนุมัติได้โดยตรง"
+        },
+        {
+          "category": "improve",
+          "tag": "ปรับปรุง",
+          "color": "info",
+          "icon": "bx-wrench",
+          "description": "ปรับโครงสร้างวงจรการแบ่งชำระเงิน (Balance-Driven Partial Payment & Last Receipt Rule) เมื่อชำระครบถ้วนจะนำเลขที่/วันที่ใบเสร็จของงวดล่าสุดมาปิดยอดอัตโนมัติ"
+        },
+        {
+          "category": "improve",
+          "tag": "ปรับปรุง",
+          "color": "info",
+          "icon": "bx-wrench",
+          "description": "ปรับความสูงและเลย์เอาต์ Modal แบบ Luxury Standard ตรึงแถวสรุปยอดรวมไว้ล่างสุดของตารางเสมอ (min-height: 100% และ spacer-row)"
+        },
+        {
+          "category": "improve",
+          "tag": "ปรับปรุง",
+          "color": "info",
+          "icon": "bx-wrench",
+          "description": "ปรับแต่งการแสดงผลชื่อผังบัญชีภาษาไทย (Subtitle Pill) และจัดเรียงส่วนหัว Modal แบบ Inline ในหน้าลูกหนี้รายตัวและหน้าเงินชดเชย"
+        },
+        {
+          "category": "improve",
+          "tag": "ปรับปรุง",
+          "color": "info",
+          "icon": "bx-wrench",
+          "description": "ปรับปรุงรายงาน PDF ลูกหนี้ชดเชยและใบสรุปตั้งหนี้ให้รองรับยอดตัดโอน CR, คำนวณส่วนต่างได้แม่นยำ และแสดงผลภาษาไทยอย่างสมบูรณ์แบบ"
+        },
+        {
+          "category": "improve",
+          "tag": "ปรับปรุง",
+          "color": "info",
+          "icon": "bx-wrench",
+          "description": "พัฒนาระบบ Auto-Migration สร้างตาราง imr_tb_debtor_cr_breakdown และ imr_tb_cr_config อัตโนมัติแบบ Zero-Configuration"
+        },
+        {
+          "category": "fix",
+          "tag": "แก้ไขข้อผิดพลาด",
+          "color": "danger",
+          "icon": "bx-bug",
+          "description": "แก้ไขสูตรยอดภาระหนี้และชดเชยในรายงานพิมพ์ลูกหนี้รายตัวกรณีแบ่งชำระให้ตรงตามยอดเงินของใบเสร็จงวดนั้นๆ"
+        },
+        {
+          "category": "fix",
+          "tag": "แก้ไขข้อผิดพลาด",
+          "color": "danger",
+          "icon": "bx-bug",
+          "description": "แก้ไขปัญหาส่วนท้ายตารางยืดผิดรูปและเลขลำดับเพี้ยนขณะพิมพ์ค้นหาใน Modal ลูกหนี้รายตัว"
+        },
+        {
+          "category": "fix",
+          "tag": "แก้ไขข้อผิดพลาด",
+          "color": "danger",
+          "icon": "bx-bug",
+          "description": "แก้ไขปัญหาแถวข้อมูลยุบรวมเป็นเซลล์เดียวจากการส่งแท็กนอกตารางใน AJAX Response"
+        },
+        {
+          "category": "fix",
+          "tag": "แก้ไขข้อผิดพลาด",
+          "color": "danger",
+          "icon": "bx-bug",
+          "description": "แก้ไขข้อผิดพลาดการลบกลุ่มย่อย Custom ที่เพิ่มใหม่ ป้องกันปัญหา ID ชนกัน และเพิ่มระบบตรวจสอบความปลอดภัยก่อนลบ"
+        },
+        {
+          "category": "fix",
+          "tag": "แก้ไขข้อผิดพลาด",
+          "color": "danger",
+          "icon": "bx-bug",
+          "description": "ปรับเงื่อนไขกลุ่ม CR-AE และ CR-เกิดสิทธิทันที ให้เลือกจากรหัสและชื่อสิทธิ (pttype/pttypename) และโอนยอด 100% เต็มจำนวน"
+        }
+      ]
+    },
+    {
+      "version": "19.08.69",
+      "date": "2026-08-19",
+      "title": "ระบบจัดการประวัติการอัปเดต (Changelog) และปรับปรุงความปลอดภัย",
+      "type": "patch",
+      "badge": "bg-primary",
+      "changes": [
+        {
+          "category": "feature",
+          "tag": "ฟีเจอร์ใหม่",
+          "color": "success",
+          "icon": "bx-gift",
+          "description": "เพิ่มระบบตรวจสอบประวัติการอัปเดตระบบ (What's New & Release Notes) แสดงรายการฟีเจอร์และการแก้ไขในแต่ละเวอร์ชั่น"
+        },
+        {
+          "category": "improve",
+          "tag": "ปรับปรุง",
+          "color": "info",
+          "icon": "bx-wrench",
+          "description": "ปรับโครงสร้างการแสดงผลเลขเวอร์ชั่นให้เป็นศูนย์กลาง (Single Source of Truth) ดึงข้อมูลอัตโนมัติ"
+        },
+        {
+          "category": "fix",
+          "tag": "แก้ไขข้อผิดพลาด",
+          "color": "danger",
+          "icon": "bx-bug",
+          "description": "ปรับปรุง SQL Query การดึงข้อมูลลูกหนี้ให้รองรับ MySQL เวอร์ชั่นเก่าและเพิ่มความเสถียร"
+        }
+      ]
+    },
+    {
+      "version": "18.08.69",
+      "date": "2026-08-18",
+      "title": "ปรับปรุงระบบตรวจสอบสถานะเซิร์ฟเวอร์และการบันทึก Log",
+      "type": "minor",
+      "badge": "bg-info",
+      "changes": [
+        {
+          "category": "feature",
+          "tag": "ฟีเจอร์ใหม่",
+          "color": "success",
+          "icon": "bx-gift",
+          "description": "เพิ่มระบบส่งสัญญาณสถานะเซิร์ฟเวอร์ (Heartbeat Tracker) เพื่อมอนิเตอร์การทำงานของระบบ"
+        },
+        {
+          "category": "improve",
+          "tag": "ปรับปรุง",
+          "color": "info",
+          "icon": "bx-wrench",
+          "description": "ปรับปรุงระบบ Audit Log บันทึกประวัติการทำงานของผู้ใช้งานลงฐานข้อมูลและไฟล์ log"
+        }
+      ]
+    },
+    {
+      "version": "15.08.69",
+      "date": "2026-08-15",
+      "title": "ปรับปรุงหน้า Dashboard และกราฟสรุปข้อมูลลูกหนี้",
+      "type": "minor",
+      "badge": "bg-secondary",
+      "changes": [
+        {
+          "category": "improve",
+          "tag": "ปรับปรุง",
+          "color": "info",
+          "icon": "bx-wrench",
+          "description": "ปรับปรุงการแสดงผลกราฟ Highcharts และการ์ดสรุปภาพรวมลูกหนี้แยกตามสิทธิ"
+        },
+        {
+          "category": "fix",
+          "tag": "แก้ไขข้อผิดพลาด",
+          "color": "danger",
+          "icon": "bx-bug",
+          "description": "แก้ไขการแสดงผลกรณีที่ไม่มีข้อมูลในระบบให้แสดง Empty State ที่เข้าใจง่าย"
+        }
+      ]
+    }
+  ]
+}
