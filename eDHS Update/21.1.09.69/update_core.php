@@ -60,7 +60,11 @@ function log_msg($message, $type = 'info', $isCli = true) {
 function get_current_installed_version($baseDir) {
     $changelogPath = $baseDir . '/system/database_config/changelog.json';
     if (file_exists($changelogPath)) {
-        $data = json_decode(@file_get_contents($changelogPath), true);
+        $content = @file_get_contents($changelogPath);
+        if ($content !== false) {
+            $content = preg_replace('/^\xEF\xBB\xBF/', '', $content);
+        }
+        $data = json_decode($content, true);
         if (!empty($data['current_version'])) {
             return $data['current_version'];
         }
@@ -198,18 +202,151 @@ function git_pull_latest($baseDir) {
 }
 
 /**
+ * ดึงข้อมูลเวอร์ชันล่าสุดจาก Remote GitHub ผ่าน HTTP (ไม่ต้องใช้ Git)
+ */
+function http_fetch_remote_version($baseDir, $force = false) {
+    $cacheFile = $baseDir . '/system/logs/remote_update_cache.json';
+    if (!$force && file_exists($cacheFile)) {
+        $cache = json_decode(@file_get_contents($cacheFile), true);
+        if ($cache && isset($cache['cached_at']) && (time() - $cache['cached_at'] < 300)) {
+            return $cache['data'];
+        }
+    }
+
+    $url = 'https://raw.githubusercontent.com/aofdrifttion/eDHS/master/version.json';
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+    curl_setopt($ch, CURLOPT_USERAGENT, 'eDHS-Updater');
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 6);
+
+    $data = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpCode === 200 && !empty($data)) {
+        $data = preg_replace('/^\xEF\xBB\xBF/', '', $data);
+        $json = json_decode($data, true);
+        if (json_last_error() === JSON_ERROR_NONE && !empty($json['latest_version'])) {
+            $cacheDir = dirname($cacheFile);
+            if (!is_dir($cacheDir)) @mkdir($cacheDir, 0755, true);
+            @file_put_contents($cacheFile, json_encode([
+                'cached_at' => time(),
+                'data'      => $json
+            ], JSON_UNESCAPED_UNICODE));
+            return $json;
+        }
+    }
+
+    return null;
+}
+
+/**
+ * ดาวน์โหลดและแตกไฟล์แพตช์จาก GitHub อัตโนมัติในกรณีที่ไม่มี Git (Pure PHP)
+ */
+function download_patch_from_github($baseDir, $targetVersion = null) {
+    $zipUrl = 'https://github.com/aofdrifttion/eDHS/archive/refs/heads/master.zip';
+    $tempDir = $baseDir . '/system/backup/temp';
+    if (!is_dir($tempDir)) {
+        @mkdir($tempDir, 0755, true);
+    }
+    $tempZip = $tempDir . '/edhs_master_update.zip';
+
+    log_msg("กำลังดาวน์โหลดแพตช์อัปเดตจาก GitHub (ไม่ต้องใช้โปรแกรม Git)...", 'info', false);
+
+    $ch = curl_init($zipUrl);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+    curl_setopt($ch, CURLOPT_USERAGENT, 'eDHS-Updater');
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 120);
+
+    $data = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $error = curl_error($ch);
+    curl_close($ch);
+
+    if ($httpCode !== 200 || empty($data)) {
+        return [
+            'success' => false,
+            'message' => 'ดาวน์โหลดไฟล์จาก GitHub ไม่สำเร็จ (HTTP ' . $httpCode . '): ' . $error
+        ];
+    }
+
+    @file_put_contents($tempZip, $data);
+
+    $zip = new ZipArchive();
+    if ($zip->open($tempZip) !== true) {
+        @unlink($tempZip);
+        return [
+            'success' => false,
+            'message' => 'ไม่สามารถเปิดไฟล์ ZIP อัปเดตได้'
+        ];
+    }
+
+    $prefix = 'eDHS-master/';
+    $extractedFiles = 0;
+
+    for ($i = 0; $i < $zip->numFiles; $i++) {
+        $entryName = $zip->getNameIndex($i);
+        if (strpos($entryName, $prefix) === 0) {
+            $relativePath = substr($entryName, strlen($prefix));
+            if (
+                strpos($relativePath, 'eDHS Update/') === 0 ||
+                $relativePath === 'version.json' ||
+                $relativePath === 'update_core.php' ||
+                $relativePath === 'update.bat' ||
+                $relativePath === 'update.sh'
+            ) {
+                $destPath = $baseDir . '/' . $relativePath;
+                if (substr($entryName, -1) === '/') {
+                    if (!is_dir($destPath)) {
+                        @mkdir($destPath, 0755, true);
+                    }
+                } else {
+                    $parentDir = dirname($destPath);
+                    if (!is_dir($parentDir)) {
+                        @mkdir($parentDir, 0755, true);
+                    }
+                    $content = $zip->getFromIndex($i);
+                    @file_put_contents($destPath, $content);
+                    $extractedFiles++;
+                }
+            }
+        }
+    }
+
+    $zip->close();
+    @unlink($tempZip);
+
+    log_msg("ดาวน์โหลดและคลายไฟล์แพตช์สำเร็จ ($extractedFiles ไฟล์)", 'success', false);
+
+    return [
+        'success' => true,
+        'extracted' => $extractedFiles
+    ];
+}
+
+/**
  * ดึงข้อมูลเวอร์ชันล่าสุดจาก Remote GitHub หรือ Local version.json
  */
 function get_latest_version_meta($baseDir, $checkRemote = true) {
-    // 1. ตรวจสอบจาก GitHub Remote ก่อน
+    // 1. ตรวจสอบจาก GitHub Remote ก่อน (ถ้ามี Git)
     if ($checkRemote) {
         $remoteData = git_fetch_remote_meta($baseDir);
         if ($remoteData && !empty($remoteData['latest_version'])) {
             return $remoteData;
         }
+
+        // 2. ถ้าไม่มี Git ให้เช็คผ่าน HTTP จาก GitHub โดยตรง
+        $httpData = http_fetch_remote_version($baseDir);
+        if ($httpData && !empty($httpData['latest_version'])) {
+            return $httpData;
+        }
     }
 
-    // 2. ถ้าต่อเน็ตไม่ได้หรือไม่มี Git ให้ดูจาก version.json ในเครื่อง
+    // 3. ถ้าต่อเน็ตไม่ได้หรือไม่มี Git ให้ดูจาก version.json ในเครื่อง
     $versionJsonPath = $baseDir . '/version.json';
     if (file_exists($versionJsonPath)) {
         $data = json_decode(@file_get_contents($versionJsonPath), true);
@@ -218,7 +355,7 @@ function get_latest_version_meta($baseDir, $checkRemote = true) {
         }
     }
     
-    // 3. Fallback: ดูจากโฟลเดอร์ล่าสุดใน eDHS Update/
+    // 4. Fallback: ดูจากโฟลเดอร์ล่าสุดใน eDHS Update/
     $patches = get_available_patch_folders($baseDir);
     if (!empty($patches)) {
         $latest = end($patches);
@@ -415,11 +552,15 @@ function execute_system_update($targetVersion = null, $isCli = true) {
 
     $patchDir = $baseDir . '/eDHS Update/' . $targetVersion;
     if (!is_dir($patchDir)) {
-        log_msg("ไม่พบโฟลเดอร์แพตช์: $patchDir", 'error', $isCli);
-        return [
-            'success' => false,
-            'message' => "ไม่พบโฟลเดอร์แพตช์: $targetVersion"
-        ];
+        // หากไม่มีโฟลเดอร์แพตช์ในเครื่อง ให้ดาวน์โหลดจาก GitHub อัตโนมัติ (ไม่ต้องใช้ Git)
+        $dlRes = download_patch_from_github($baseDir, $targetVersion);
+        if (!$dlRes['success'] || !is_dir($patchDir)) {
+            log_msg("ไม่พบโฟลเดอร์แพตช์: $patchDir", 'error', $isCli);
+            return [
+                'success' => false,
+                'message' => "ไม่พบโฟลเดอร์แพตช์: $targetVersion " . (!empty($dlRes['message']) ? '(' . $dlRes['message'] . ')' : '')
+            ];
+        }
     }
 
     log_msg("---------------------------------------------------------", 'info', $isCli);
