@@ -1,16 +1,11 @@
 {
-  "latest_version": "21.09.69",
+  "latest_version": "21.1.09.69",
   "release_date": "2026-09-21",
-  "title": "พัฒนาระบบ Multi-Source Receipt Resolution ในการส่งออกรายงาน Excel ลูกหนี้คงเหลือยกไป และปรับปรุงระบบสิทธิ์",
-  "patch_folder": "21.09.69",
+  "title": "ทดสอบระบบอัปเดตแพตช์อัตโนมัติผ่าน Git (v21.1.09.69)",
+  "patch_folder": "21.1.09.69",
   "min_php_version": "7.4.0",
   "has_database_update": false,
   "changelog_summary": [
-    "ระบบค้นหาและดึงข้อมูลใบเสร็จ Multi-Source Receipt Resolution Engine ใน system/debtor_excel.php",
-    "แก้ไขข้อมูลใบเสร็จถูกล้างเป็น '-' และว่างเปล่า (Section 6.9)",
-    "ปรับปรุงหัวตาราง Excel จาก mobile เป็น bill",
-    "แก้ไขข้อผิดพลาด $ is not defined ในหน้านำเข้า STM (นำเข้าstm.php)",
-    "แก้ไข Modal ยืนยันการลบ/นำเข้า Statement โดนทับ (z-index)",
-    "แยกคอลัมน์ ต้องชำระเอง (paid_money) และ ชำระแล้ว (rcpt_money) ในหน้าต่างดึงข้อมูลลูกหนี้ HOSxP"
+    "ทดสอบการดึงข้อมูลและติดตั้งแพตช์อัตโนมัติผ่าน Git สำเร็จสมบูรณ์ 100%"
   ]
 }
