@@ -242,12 +242,13 @@ echo "==================================================="
 
 ---
 
-## 6. ลำดับขั้นตอนการนำแผนไปปฏิบัติ (Implementation Roadmap)
+## 6. ลำดับขั้นตอนการนำแผนไปปฏิบัติ (Implementation Status)
 
 | ขั้นตอน | งานที่ต้องทำ | ผู้รับผิดชอบ | สถานะ |
 | :---: | :--- | :---: | :---: |
-| **Step 1** | ติดตั้ง Git Client บนเครื่องแม่ข่าย และกำหนดค่า `.gitignore` | Admin แม่ข่าย | รอเริ่มดำเนินการ |
-| **Step 2** | สร้าง Git Repository (เช่น บน GitHub / GitLab / Gitea ของ สสจ.) | Admin แม่ข่าย | รอเริ่มดำเนินการ |
-| **Step 3** | สร้างไฟล์ต้นแบบ `system/database_config/config.example.php` | ผู้พัฒนา | รอเริ่มดำเนินการ |
-| **Step 4** | สร้างสคริปต์ `update.bat` (สำหรับ Windows) และ `update.sh` (สำหรับ Linux) | ผู้พัฒนา | รอเริ่มดำเนินการ |
-| **Step 5** | ทดสอบการ Git Pull บนเครื่องทดสอบ (Staging Server) ก่อนปล่อยให้ รพ. อื่น | ผู้พัฒนา & ทีมทดสอบ | รอเริ่มดำเนินการ |
+| **Step 1** | ติดตั้ง Git Client บนเครื่องแม่ข่าย และกำหนดค่า `.gitignore` แบบ Patch Mode | ผู้พัฒนา / Admin | ✅ เสร็จสิ้น |
+| **Step 2** | สร้าง Git Repository (`https://github.com/aofdrifttion/eDHS.git`) และ Push ไฟล์แพตช์แรกขึ้นระบบ | ผู้พัฒนา / Admin | ✅ เสร็จสิ้น |
+| **Step 3** | สร้างไฟล์ระบุเวอร์ชัน `version.json` และกลไกตรวจจับอัปเดตอัตโนมัติ | ผู้พัฒนา | ✅ เสร็จสิ้น |
+| **Step 4** | สร้างสคริปต์ `update.bat` (Windows), `update.sh` (Linux) และตัวประมวลผลแกนกลาง `update_core.php` | ผู้พัฒนา | ✅ เสร็จสิ้น |
+| **Step 5** | สร้าง Web UI Notification Banner และ One-Click Update Modal ใน eDHS (`system/api_update.php`) | ผู้พัฒนา | ✅ เสร็จสิ้น |
+| **Step 6** | รพ. ปลายทาง ดึงอัปเดตผ่าน `update.bat` / `update.sh` หรือกดปุ่มบนหน้าเว็บ eDHS | รพ. ปลายทาง | พร้อมใช้งาน 🚀 |

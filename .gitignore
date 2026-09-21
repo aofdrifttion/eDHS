@@ -11,6 +11,10 @@
 !/eDHS Update/**
 !/.gitignore
 !/GIT_PULL_AND_UPDATE_PLAN.md
+!/version.json
+!/update_core.php
+!/update.bat
+!/update.sh
 
 # 3. กฎความปลอดภัยภายใน eDHS Update (ห้ามเอาคอนฟิกและฐานข้อมูลขึ้นเด็ดขาด)
 eDHS Update/**/config.php
