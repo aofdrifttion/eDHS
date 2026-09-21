@@ -60,7 +60,11 @@ function log_msg($message, $type = 'info', $isCli = true) {
 function get_current_installed_version($baseDir) {
     $changelogPath = $baseDir . '/system/database_config/changelog.json';
     if (file_exists($changelogPath)) {
-        $data = json_decode(@file_get_contents($changelogPath), true);
+        $content = @file_get_contents($changelogPath);
+        if ($content !== false) {
+            $content = preg_replace('/^\xEF\xBB\xBF/', '', $content);
+        }
+        $data = json_decode($content, true);
         if (!empty($data['current_version'])) {
             return $data['current_version'];
         }
