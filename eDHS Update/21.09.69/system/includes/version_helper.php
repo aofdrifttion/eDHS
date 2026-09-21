@@ -321,47 +321,47 @@ if (!function_exists('render_changelog_modal')) {
         ?>
         <!-- Modal ประวัติการอัปเดตระบบ (Changelog & Release Notes) -->
         <div class="modal fade" id="changelogModal" tabindex="-1" aria-labelledby="changelogModalLabel" aria-hidden="true">
-          <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg" role="document">
-            <div class="modal-content border-0 shadow-lg" style="border-radius: 16px; overflow: hidden;">
+          <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl" style="max-width: 960px;" role="document">
+            <div class="modal-content border-0 shadow-lg" style="border-radius: 20px; overflow: hidden;">
               
               <!-- Modal Header -->
-              <div class="modal-header bg-primary text-white px-4 py-3 align-items-center">
+              <div class="modal-header text-white px-4 py-3 align-items-center" style="background: linear-gradient(135deg, #1e293b 0%, #334155 100%);">
                 <div class="d-flex align-items-center">
-                  <div class="p-2 rounded-circle bg-white text-primary me-3 d-flex align-items-center justify-content-center shadow-sm" style="width: 42px; height: 42px;">
-                    <i class="bx bx-gift font-size-22" style="font-size: 24px;"></i>
+                  <div class="p-2 rounded-circle bg-white text-dark me-3 d-flex align-items-center justify-content-center shadow-sm" style="width: 44px; height: 44px;">
+                    <i class="bx bx-gift font-size-24" style="font-size: 24px; color: #696cff;"></i>
                   </div>
                   <div>
-                    <h5 class="modal-title text-white mb-0 fw-bold" id="changelogModalLabel">
+                    <h5 class="modal-title text-white mb-0 fw-bold" id="changelogModalLabel" style="font-size: 17px; letter-spacing: 0.3px;">
                       ประวัติการอัปเดตระบบ (Release Notes)
                     </h5>
-                    <small class="text-white-50">
+                    <small class="text-white-50" style="font-size: 12.5px;">
                       ระบบบริหารลูกหนี้โรงพยาบาลอิเล็กทรอนิกส์ (eDHS)
                     </small>
                   </div>
                 </div>
                 <div class="d-flex align-items-center gap-2">
                   <?php if ($hasUpdate): ?>
-                    <button type="button" class="btn btn-warning btn-sm rounded-pill px-3 fw-bold shadow-xs text-dark" onclick="triggerSystemUpdate('<?= htmlspecialchars($latestVer) ?>')">
-                      <i class="bx bx-refresh me-1"></i>อัปเดตเป็น v<?= htmlspecialchars($latestVer); ?>
+                    <button type="button" class="btn btn-warning btn-sm rounded-pill px-3 py-1 fw-bold shadow-xs text-dark d-inline-flex align-items-center" onclick="triggerSystemUpdate('<?= htmlspecialchars($latestVer) ?>')">
+                      <i class="bx bx-refresh me-1 font-size-16"></i>อัปเดตเป็น v<?= htmlspecialchars($latestVer); ?>
                     </button>
                   <?php else: ?>
-                    <span class="badge bg-white text-primary rounded-pill px-3 py-2 fw-semibold shadow-xs" style="font-size: 12px;">
-                      <i class="bx bx-check-circle me-1 text-success"></i>v<?= htmlspecialchars($version); ?> ล่าสุด
+                    <span class="badge bg-white text-dark rounded-pill px-3 py-1.5 fw-semibold shadow-xs d-inline-flex align-items-center" style="font-size: 12px;">
+                      <i class="bx bx-check-circle me-1 text-success font-size-16"></i>v<?= htmlspecialchars($version); ?> (เวอร์ชันล่าสุด)
                     </span>
                   <?php endif; ?>
-                  <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                  <button type="button" class="btn-close btn-close-white ms-2" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
               </div>
 
               <!-- Modal Body -->
-              <div class="modal-body p-4" style="background-color: #f8f9fc; max-height: 70vh;">
+              <div class="modal-body p-4" style="background-color: #f1f5f9; max-height: 75vh; overflow-x: hidden;">
                 <?php if (empty($releases)): ?>
                   <div class="text-center py-5">
-                    <i class="bx bx-folder-open text-muted" style="font-size: 48px;"></i>
-                    <p class="text-muted mt-2">ยังไม่มีข้อมูลบันทึกประวัติการอัปเดต</p>
+                    <i class="bx bx-folder-open text-muted" style="font-size: 54px;"></i>
+                    <p class="text-muted mt-2 fs-6">ยังไม่มีข้อมูลบันทึกประวัติการอัปเดตในระบบ</p>
                   </div>
                 <?php else: ?>
-                  <div class="changelog-timeline position-relative ps-1">
+                  <div class="changelog-container">
                     <?php foreach ($releases as $index => $rel): 
                       $isLatest = ($index === 0);
                       $relVersion = $rel['version'] ?? '-';
@@ -369,28 +369,34 @@ if (!function_exists('render_changelog_modal')) {
                       $relTitle = $rel['title'] ?? 'การปรับปรุงระบบ';
                       $changes = $rel['changes'] ?? [];
                     ?>
-                      <div class="card mb-3 border-0 shadow-sm <?= $isLatest ? 'border-start border-primary border-4' : '' ?>" style="border-radius: 12px;">
-                        <div class="card-header bg-white pb-2 pt-3 px-3 d-flex justify-content-between align-items-center flex-wrap gap-2 border-bottom-0">
-                          <div class="d-flex align-items-center gap-2">
-                            <span class="badge <?= $isLatest ? 'bg-primary' : 'bg-secondary'; ?> rounded-pill px-3 py-1 fw-bold" style="font-size: 13px;">
-                              <i class="bx bx-git-commit me-1"></i>v<?= htmlspecialchars($relVersion); ?>
-                            </span>
-                            <span class="fw-bold text-dark" style="font-size: 15px;">
-                              <?= htmlspecialchars($relTitle); ?>
-                            </span>
-                            <?php if ($isLatest): ?>
-                              <span class="badge bg-label-success rounded-pill px-2 py-1" style="font-size: 11px;">
-                                <i class="bx bx-star me-1"></i>เวอร์ชั่นปัจจุบัน
+                      <div class="card mb-4 border-0 shadow-sm" style="border-radius: 14px; overflow: hidden; border-left: 5px solid <?= $isLatest ? '#696cff' : '#94a3b8'; ?> !important;">
+                        
+                        <!-- Version Header -->
+                        <div class="card-header bg-white pt-3 pb-3 px-4 border-bottom" style="border-color: #e2e8f0 !important;">
+                          <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                            <div class="d-flex align-items-center gap-2">
+                              <span class="badge <?= $isLatest ? 'bg-primary' : 'bg-secondary'; ?> rounded-pill px-3 py-1.5 fw-bold shadow-xs" style="font-size: 13.5px; letter-spacing: 0.5px;">
+                                <i class="bx bx-git-commit me-1"></i>v<?= htmlspecialchars($relVersion); ?>
                               </span>
-                            <?php endif; ?>
+                              <?php if ($isLatest): ?>
+                                <span class="badge rounded-pill px-2.5 py-1 fw-semibold shadow-xs" style="background-color: #e8fadf; color: #28a745; font-size: 11.5px;">
+                                  <i class="bx bx-star me-1"></i>เวอร์ชั่นปัจจุบัน
+                                </span>
+                              <?php endif; ?>
+                            </div>
+                            <div class="text-muted d-flex align-items-center" style="font-size: 13px;">
+                              <i class="bx bx-calendar me-1.5 text-primary"></i><?= $relDate; ?>
+                            </div>
                           </div>
-                          <small class="text-muted d-flex align-items-center">
-                            <i class="bx bx-calendar me-1"></i><?= $relDate; ?>
-                          </small>
+                          <h6 class="fw-bold text-dark mb-0" style="font-size: 14.5px; line-height: 1.6;">
+                            <?= htmlspecialchars($relTitle); ?>
+                          </h6>
                         </div>
-                        <div class="card-body px-3 pt-2 pb-3">
+
+                        <!-- Changes Items -->
+                        <div class="card-body px-4 py-3" style="background-color: #ffffff;">
                           <?php if (!empty($changes)): ?>
-                            <ul class="list-unstyled mb-0">
+                            <div class="d-flex flex-column gap-3">
                               <?php foreach ($changes as $change): 
                                 $meta = get_changelog_category_meta(
                                     $change['category'] ?? '', 
@@ -400,21 +406,34 @@ if (!function_exists('render_changelog_modal')) {
                                 $color = $meta['color'];
                                 $icon = $meta['icon'];
                                 $desc = $change['description'] ?? '';
+
+                                // Mapping สีสำหรับพื้นหลังและตัวอักษร
+                                $badgeStyles = [
+                                    'success' => 'background-color: #e8fadf; color: #28a745; border: 1px solid #c3e6cb;',
+                                    'info'    => 'background-color: #e7f7ff; color: #007bff; border: 1px solid #b8daff;',
+                                    'danger'  => 'background-color: #ffeef0; color: #dc3545; border: 1px solid #f5c6cb;',
+                                    'warning' => 'background-color: #fff8e6; color: #ff9800; border: 1px solid #ffeeba;',
+                                    'primary' => 'background-color: #ebeefe; color: #696cff; border: 1px solid #d4dafd;'
+                                ];
+                                $badgeStyle = $badgeStyles[$color] ?? $badgeStyles['info'];
                               ?>
-                                <li class="d-flex align-items-start mb-2 last-mb-0">
-                                  <span class="badge bg-label-<?= htmlspecialchars($color); ?> me-2 mt-1 px-2 py-1 d-inline-flex align-items-center" style="font-size: 11.5px; white-space: nowrap;">
-                                    <i class="bx <?= htmlspecialchars($icon); ?> me-1"></i><?= htmlspecialchars($tag); ?>
-                                  </span>
-                                  <span class="text-secondary" style="font-size: 13.5px; line-height: 1.5;">
+                                <div class="p-3 rounded-3" style="background-color: #f8fafc; border: 1px solid #e2e8f0;">
+                                  <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
+                                    <span class="badge rounded-pill px-2.5 py-1 d-inline-flex align-items-center fw-bold" style="<?= $badgeStyle ?> font-size: 12px;">
+                                      <i class="bx <?= htmlspecialchars($icon); ?> me-1"></i><?= htmlspecialchars($tag); ?>
+                                    </span>
+                                  </div>
+                                  <div class="text-secondary ps-1" style="font-size: 13.5px; line-height: 1.65; word-break: break-word;">
                                     <?= htmlspecialchars($desc); ?>
-                                  </span>
-                                </li>
+                                  </div>
+                                </div>
                               <?php endforeach; ?>
-                            </ul>
+                            </div>
                           <?php else: ?>
-                            <p class="text-muted mb-0" style="font-size: 13px;">ไม่มีรายละเอียดการเปลี่ยนแปลงย่อย</p>
+                            <p class="text-muted mb-0 py-2" style="font-size: 13px;">ไม่มีรายละเอียดการเปลี่ยนแปลงย่อย</p>
                           <?php endif; ?>
                         </div>
+
                       </div>
                     <?php endforeach; ?>
                   </div>
@@ -422,17 +441,17 @@ if (!function_exists('render_changelog_modal')) {
               </div>
 
               <!-- Modal Footer -->
-              <div class="modal-footer bg-white border-top px-4 py-2 d-flex justify-content-between align-items-center">
-                <small class="text-muted">
-                  <i class="bx bx-info-circle me-1"></i>หากพบปัญหาการใช้งาน กรุณาติดต่อผู้ดูแลระบบ
+              <div class="modal-footer bg-white border-top px-4 py-3 d-flex justify-content-between align-items-center">
+                <small class="text-muted d-flex align-items-center">
+                  <i class="bx bx-info-circle me-1.5 text-primary"></i>หากพบปัญหาการใช้งาน กรุณาติดต่อทีมพัฒนาระบบ eDHS
                 </small>
                 <div class="d-flex gap-2">
                   <?php if ($hasUpdate): ?>
-                    <button type="button" class="btn btn-warning text-dark px-3 rounded-pill fw-bold" onclick="triggerSystemUpdate('<?= htmlspecialchars($latestVer) ?>')">
-                      <i class="bx bx-refresh me-1"></i>อัปเดตระบบเดี๋ยวนี้
+                    <button type="button" class="btn btn-warning text-dark px-4 py-2 rounded-pill fw-bold shadow-xs d-inline-flex align-items-center" onclick="triggerSystemUpdate('<?= htmlspecialchars($latestVer) ?>')">
+                      <i class="bx bx-refresh me-1.5 font-size-18"></i>อัปเดตระบบเดี๋ยวนี้ ⚡
                     </button>
                   <?php endif; ?>
-                  <button type="button" class="btn btn-primary px-4 rounded-pill" data-bs-dismiss="modal">
+                  <button type="button" class="btn btn-primary px-4 py-2 rounded-pill fw-semibold shadow-xs" data-bs-dismiss="modal">
                     <i class="bx bx-check me-1"></i>ปิดหน้าต่าง
                   </button>
                 </div>
