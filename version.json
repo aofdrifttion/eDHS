@@ -31,6 +31,20 @@
       "color": "primary",
       "icon": "bx-check-shield",
       "description": "กำหนดโหมด MYSQLI_REPORT_OFF ใน db_helper.php และครอบบล็อกคำสั่งแบ่งจ่ายด้วย try-catch Throwable ป้องกัน Uncaught mysqli_sql_exception และส่งข้อความแจ้งเตือนที่ชัดเจนกลับสู่หน้าจอ รองรับทั้ง Windows XAMPP (PHP 7/8) และ Linux Ubuntu Server"
+    },
+    {
+      "category": "feature",
+      "tag": "ระบบแสดงรายการปรับปรุงล่วงหน้าก่อนอัปเดต (Changelog Preview)",
+      "color": "info",
+      "icon": "bx-list-check",
+      "description": "ปรับปรุงหน้าต่างดูรายละเอียด (Changelog Modal) ให้ดึงรายการเปลี่ยนแปลงของเวอร์ชันใหม่ล่วงหน้ามาแสดงผลบนสุด พร้อมป้ายแจ้งเตือนสีส้มทอง และปุ่มกดอัปเดตได้ทันที"
+    },
+    {
+      "category": "security",
+      "tag": "ระบบบังคับอัปเดตระบบก่อนเข้าใช้งาน (Mandatory Update Gate)",
+      "color": "warning",
+      "icon": "bx-shield-quarter",
+      "description": "หากระบบตรวจพบว่ามีเวอร์ชันใหม่ จะล็อกหน้าจอไม่ให้ผู้ใช้เข้าถึงหรือทำงานในส่วนอื่นๆ จนกว่าจะกดอัปเดตระบบเรียบร้อย พร้อมบล็อก API ด้วย HTTP 426 เพื่อป้องกันข้อผิดพลาดและความไม่สอดคล้องของข้อมูล"
     }
   ]
 }

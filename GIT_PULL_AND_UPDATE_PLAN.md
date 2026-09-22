@@ -232,13 +232,16 @@ echo "==================================================="
 
 ---
 
-## 5. ระบบตรวจสอบและป้องกันฐานข้อมูลเสียหาย (Database Safety)
+## 5. ระบบตรวจสอบและป้องกันฐานข้อมูลเสียหาย (Database Safety & Auto-Migration)
 
-ทุกครั้งที่มีการอัปเดตเวอร์ชันใหม่ ระบบ eDHS มีกลไกป้องกันฐานข้อมูลดังนี้:
+ทุกครั้งที่มีการอัปเดตเวอร์ชันใหม่ ระบบ eDHS มีกลไกป้องกันฐานข้อมูลและปรับปรุงโครงสร้างอัตโนมัติ (Zero-Configuration Auto-Migration):
 1. **Auto-Migration ในตัว:**
-   - ตาราง CR Breakdown (`imr_tb_debtor_cr_breakdown`) และ SSS Breakdown (`imr_tb_debtor_sss_breakdown`) มีฟังก์ชัน `check_and_migrate_cr_tables()` และ `check_and_migrate_sss_tables()` ที่จะสร้างตารางให้อัตโนมัติเมื่อเปิดหน้าแรก
-2. **คอลัมน์ใหม่:**
-   - หากมีการเพิ่มคอลัมน์ใหม่ (เช่น `original_debit`, `no`, `hospcode`) ควรเขียนคำสั่ง `ALTER TABLE ... ADD COLUMN IF NOT EXISTS ...` บรรจุไว้ใน `system/migration_tool.php`
+   - **ตาราง CR Breakdown (`imr_tb_debtor_cr_breakdown`) และ SSS Breakdown (`imr_tb_debtor_sss_breakdown`):** มีฟังก์ชัน `check_and_migrate_cr_tables()` และ `check_and_migrate_sss_tables()` ที่จะสร้างตารางและดัชนีให้อัตโนมัติเมื่อเปิดหน้าแรก
+   - **ตารางประวัติการแบ่งจ่าย (`imr_tb_payment_history` - v21.2.09.69):** มีฟังก์ชัน `ensure_payment_history_table($conn)` อยู่ใน `system/database_config/db_helper.php` รันอัตโนมัติเมื่อมีการตัดชำระหนี้แบบแบ่งจ่าย (`datatimestamp-insert2.php`)
+   - **การตรวจสอบและเติมคอลัมน์อัตโนมัติแบบ Defensive:** หากมีตารางเดิมอยู่แล้วแต่ยังไม่มีคอลัมน์ `bill_date` ฟังก์ชันจะใช้ `SHOW COLUMNS LIKE 'bill_date'` ตรวจจับ และรัน `ALTER TABLE ... ADD COLUMN bill_date DATE DEFAULT NULL AFTER bill_no` ให้อัตโนมัติโดยไม่ทำลายข้อมูลเดิม
+2. **การรองรับ MySQL 8.0 Strict Mode & PHP 8.3:**
+   - ฟังก์ชัน `parse_bill_date_to_sql($dateStr)` แปลงวันที่ภาษาไทย (พ.ศ.) และ ค.ศ. ทุกรูปแบบสู่ ISO `YYYY-MM-DD` และคืนค่า SQL `NULL` ทันทีเมื่อว่าง เพื่อป้องกันปัญหา `Incorrect date value: '' for column 'bill_date'` บน Ubuntu Linux
+   - กำหนด `@mysqli_report(MYSQLI_REPORT_OFF);` ที่ส่วนหัวของ `system/database_config/db_helper.php` เพื่อป้องกัน Fatal Uncaught Exception บน PHP 8.1 - 8.3 ของเครื่อง รพ. ปลายทาง โดยที่ รพ. ไม่จำเป็นต้องแก้ไขไฟล์คอนฟิกเฉพาะที่ (`config.php`)
 
 ---
 
@@ -247,8 +250,25 @@ echo "==================================================="
 | ขั้นตอน | งานที่ต้องทำ | ผู้รับผิดชอบ | สถานะ |
 | :---: | :--- | :---: | :---: |
 | **Step 1** | ติดตั้ง Git Client บนเครื่องแม่ข่าย และกำหนดค่า `.gitignore` แบบ Patch Mode | ผู้พัฒนา / Admin | ✅ เสร็จสิ้น |
-| **Step 2** | สร้าง Git Repository (`https://github.com/aofdrifttion/eDHS.git`) และ Push ไฟล์แพตช์แรกขึ้นระบบ | ผู้พัฒนา / Admin | ✅ เสร็จสิ้น |
+| **Step 2** | สร้าง Git Repository (`https://github.com/aofdrifttion/eDHS.git`) และ Push ไฟล์แพตช์ขึ้นระบบ | ผู้พัฒนา / Admin | ✅ เสร็จสิ้น |
 | **Step 3** | สร้างไฟล์ระบุเวอร์ชัน `version.json` และกลไกตรวจจับอัปเดตอัตโนมัติ | ผู้พัฒนา | ✅ เสร็จสิ้น |
 | **Step 4** | สร้างสคริปต์ `update.bat` (Windows), `update.sh` (Linux) และตัวประมวลผลแกนกลาง `update_core.php` | ผู้พัฒนา | ✅ เสร็จสิ้น |
 | **Step 5** | สร้าง Web UI Notification Banner และ One-Click Update Modal ใน eDHS (`system/api_update.php`) | ผู้พัฒนา | ✅ เสร็จสิ้น |
-| **Step 6** | รพ. ปลายทาง ดึงอัปเดตผ่าน `update.bat` / `update.sh` หรือกดปุ่มบนหน้าเว็บ eDHS | รพ. ปลายทาง | พร้อมใช้งาน 🚀 |
+| **Step 6** | ระบบแสดงรายการปรับปรุงล่วงหน้า (Changelog Preview) และระบบบังคับอัปเดต (Mandatory Update Gate) | ผู้พัฒนา | ✅ เสร็จสิ้น (v21.2.09.69) |
+| **Step 7** | รพ. ปลายทาง ดึงอัปเดตผ่าน `update.bat` / `update.sh` หรือกดปุ่ม 1-Click Update บนหน้าเว็บ eDHS | รพ. ปลายทาง | พร้อมใช้งาน 🚀 |
+
+---
+
+## 7. สถาปัตยกรรมระบบบังคับอัปเดตและแสดงรายการปรับปรุงล่วงหน้า (v21.2.09.69)
+
+เพื่อให้มั่นใจว่าโรงพยาบาลเครือข่ายทุกแห่งใช้งานสูตรคำนวณลูกหนี้ สิทธิ์ และมาตรการความปลอดภัยเดียวกันเสมอ ระบบได้ติดตั้งกลไกความปลอดภัยระดับระบบ:
+
+1. **ระบบแสดงรายการปรับปรุงล่วงหน้า (Changelog Preview Before Update):**
+   - เมื่อมีเวอร์ชันใหม่ออกมา ผู้ใช้สามารถคลิกปุ่ม **"ดูรายละเอียด"** ที่แถบแจ้งเตือนด้านบน
+   - ระบบจะดึงรายการเปลี่ยนแปลงของเวอร์ชันใหม่ขึ้นมาแสดงผลเป็นรายการแรกสุด (Index 0) พร้อมแถบสีส้มทอง และป้าย `(เวอร์ชั่นใหม่ที่จะปรับปรุง)` ให้ผู้ใช้เห็นรายละเอียดที่กำลังจะได้รับการแก้ไขอย่างโปร่งใส
+2. **ระบบบังคับอัปเดตก่อนเข้าใช้งาน (Mandatory System Update Gate):**
+   - ฟังก์ชัน `enforce_mandatory_system_update()` ถูกรันผ่าน `config.php` ทุกหน้าในระบบ
+   - **กรณีเปิดผ่านเบราว์เซอร์:** ล็อกหน้าจอทุกโมดูลด้วย UI พอร์ทัลเต็มจอ (Full-screen Dark Glassmorphism) พร้อมแสดงรายการสิ่งที่ปรับปรุง และปุ่มกดอัปเดตทันที (ไม่สามารถกดปิดหรือข้ามได้)
+   - **กรณีเบื้องหลัง (AJAX / POST API):** ปฏิเสธการทำงานและส่งสถานะ `HTTP 426 Upgrade Required` เพื่อป้องกันความไม่สอดคล้องของข้อมูล
+   - **ข้อยกเว้นความปลอดภัย:** ยกเว้นหน้า `login.php`, `login_2fa.php`, `logout.php`, `register.php`, `api_update.php`, `update_core.php` และหน้าตั้งค่าระบบในโฟลเดอร์ `database_config/` เพื่อให้สามารถเข้าสู่ระบบและอัปเดตได้ราบรื่น
+   - **สิทธิ์การกดอัปเดต:** อนุญาตให้ผู้ใช้ที่ล็อกอินเข้าสู่ระบบทุกคน (`isset($_SESSION['user_id'])`) สามารถกดปุ่มคลิกเดียวอัปเดตระบบได้ทันที ป้องกันปัญหาเจ้าหน้าที่ติดล็อกหน้าจอเมื่อแอดมินไม่อยู่
