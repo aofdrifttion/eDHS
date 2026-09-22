@@ -733,4 +733,463 @@ if (!function_exists('render_changelog_modal')) {
         return ob_get_clean();
     }
 }
+
+/**
+ * แสดงหน้าจอบังคับอัปเดตระบบ (Mandatory System Update Lock Screen)
+ * ล็อกหน้าจอทั้งหมดไม่ให้ผู้ใช้ทำงานส่วนอื่นๆ จนกว่าจะกดอัปเดตระบบเป็นเวอร์ชันล่าสุด
+ */
+if (!function_exists('render_mandatory_update_screen')) {
+    function render_mandatory_update_screen($updateInfo) {
+        $currentVer = htmlspecialchars($updateInfo['current_version'] ?? '00.00.00');
+        $latestVer = htmlspecialchars($updateInfo['latest_version'] ?? '00.00.00');
+        $meta = $updateInfo['meta'] ?? [];
+        $title = htmlspecialchars($meta['title'] ?? "อัปเดตระบบเป็นเวอร์ชัน $latestVer");
+        $relDate = isset($meta['release_date']) ? format_changelog_date($meta['release_date']) : '';
+
+        // ดึงรายการเปลี่ยนแปลงจาก releases
+        $releases = get_system_changelog();
+        $upcomingRelease = $releases[0] ?? null;
+        $changes = $upcomingRelease['changes'] ?? $meta['changes'] ?? [];
+        if (empty($changes) && !empty($meta['changelog_summary'])) {
+            foreach ($meta['changelog_summary'] as $sumText) {
+                $changes[] = [
+                    'category' => 'improve',
+                    'tag' => 'รายการปรับปรุง',
+                    'color' => 'success',
+                    'icon' => 'bx-check-circle',
+                    'description' => $sumText
+                ];
+            }
+        }
+
+        // ล้าง Output Buffer เดิมทั้งหมด เพื่อป้องกันไม่ให้เนื้อหาหน้าปกติหลุดรอดออกไป
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+
+        header('Content-Type: text/html; charset=UTF-8');
+        ?>
+        <!DOCTYPE html>
+        <html lang="th">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>จำเป็นต้องอัปเดตระบบ - eDHS (eDebtor Hospital System)</title>
+          <link rel="preconnect" href="https://fonts.googleapis.com">
+          <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+          <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+          <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/boxicons@latest/css/boxicons.min.css">
+          <style>
+            * { box-sizing: border-box; }
+            body {
+              margin: 0;
+              padding: 0;
+              min-height: 100vh;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              background: radial-gradient(circle at 15% 15%, #1e1b4b 0%, #0f172a 55%, #020617 100%);
+              font-family: 'Prompt', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              color: #f8fafc;
+              overflow-x: hidden;
+            }
+            .ambient-orb-1 {
+              position: fixed;
+              top: 10%;
+              left: 15%;
+              width: 380px;
+              height: 380px;
+              background: rgba(99, 102, 241, 0.22);
+              border-radius: 50%;
+              filter: blur(120px);
+              z-index: 0;
+              pointer-events: none;
+            }
+            .ambient-orb-2 {
+              position: fixed;
+              bottom: 10%;
+              right: 15%;
+              width: 420px;
+              height: 420px;
+              background: rgba(245, 158, 11, 0.18);
+              border-radius: 50%;
+              filter: blur(130px);
+              z-index: 0;
+              pointer-events: none;
+            }
+            .update-card {
+              position: relative;
+              z-index: 1;
+              width: 100%;
+              max-width: 820px;
+              margin: 30px 20px;
+              background: rgba(15, 23, 42, 0.88);
+              backdrop-filter: blur(25px);
+              -webkit-backdrop-filter: blur(25px);
+              border: 1px solid rgba(255, 255, 255, 0.12);
+              border-radius: 24px;
+              box-shadow: 0 30px 70px -15px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.05);
+              overflow: hidden;
+              animation: cardFadeIn 0.5s ease-out;
+            }
+            @keyframes cardFadeIn {
+              from { opacity: 0; transform: translateY(20px) scale(0.98); }
+              to { opacity: 1; transform: translateY(0) scale(1); }
+            }
+            .update-icon-circle {
+              width: 72px;
+              height: 72px;
+              border-radius: 50%;
+              background: linear-gradient(135deg, rgba(245, 158, 11, 0.25) 0%, rgba(217, 119, 6, 0.1) 100%);
+              border: 2px solid rgba(245, 158, 11, 0.5);
+              display: inline-flex;
+              align-items: center;
+              justify-content: center;
+              animation: pulseGlow 2.5s infinite ease-in-out;
+            }
+            @keyframes pulseGlow {
+              0%, 100% { box-shadow: 0 0 20px rgba(245, 158, 11, 0.35); transform: scale(1); }
+              50% { box-shadow: 0 0 35px rgba(245, 158, 11, 0.65); transform: scale(1.05); }
+            }
+            .badge-warning-soft {
+              background: rgba(245, 158, 11, 0.15);
+              color: #fbbf24;
+              border: 1px solid rgba(245, 158, 11, 0.35);
+              border-radius: 50px;
+              padding: 5px 14px;
+              font-size: 13px;
+              font-weight: 600;
+              display: inline-flex;
+              align-items: center;
+            }
+            .badge-version {
+              background: rgba(255, 255, 255, 0.1);
+              color: #f1f5f9;
+              border: 1px solid rgba(255, 255, 255, 0.2);
+              border-radius: 50px;
+              padding: 5px 14px;
+              font-size: 12.5px;
+              font-weight: 600;
+              display: inline-flex;
+              align-items: center;
+            }
+            .changes-container {
+              background: rgba(2, 6, 23, 0.6);
+              border: 1px solid rgba(255, 255, 255, 0.08);
+              border-radius: 18px;
+              padding: 22px;
+              max-height: 380px;
+              overflow-y: auto;
+            }
+            .changes-container::-webkit-scrollbar { width: 6px; }
+            .changes-container::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 4px; }
+            .change-item {
+              background: rgba(255, 255, 255, 0.04);
+              border: 1px solid rgba(255, 255, 255, 0.08);
+              border-radius: 12px;
+              padding: 14px 16px;
+              margin-bottom: 12px;
+              transition: all 0.2s;
+            }
+            .change-item:hover {
+              background: rgba(255, 255, 255, 0.07);
+              border-color: rgba(255, 255, 255, 0.15);
+            }
+            .change-item:last-child { margin-bottom: 0; }
+            .tag-badge {
+              font-size: 11.5px;
+              font-weight: 700;
+              padding: 3px 10px;
+              border-radius: 30px;
+              display: inline-flex;
+              align-items: center;
+              margin-bottom: 6px;
+            }
+            .tag-success { background: rgba(34, 197, 94, 0.18); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.35); }
+            .tag-danger  { background: rgba(239, 68, 68, 0.18);  color: #f87171; border: 1px solid rgba(239, 68, 68, 0.35); }
+            .tag-primary { background: rgba(99, 102, 241, 0.2);  color: #a5b4fc; border: 1px solid rgba(99, 102, 241, 0.4); }
+            .tag-info    { background: rgba(14, 165, 233, 0.18); color: #38bdf8; border: 1px solid rgba(14, 165, 233, 0.35); }
+            .tag-warning { background: rgba(245, 158, 11, 0.18); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.35); }
+            .btn-cta {
+              width: 100%;
+              padding: 18px 28px;
+              font-size: 16.5px;
+              font-weight: 700;
+              color: #0f172a;
+              background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+              border: none;
+              border-radius: 50px;
+              cursor: pointer;
+              box-shadow: 0 10px 30px rgba(245, 158, 11, 0.4);
+              transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+              display: inline-flex;
+              align-items: center;
+              justify-content: center;
+              text-decoration: none;
+            }
+            .btn-cta:hover:not(:disabled) {
+              transform: translateY(-2px);
+              box-shadow: 0 15px 40px rgba(245, 158, 11, 0.55);
+              background: linear-gradient(135deg, #fcd34d 0%, #fbbf24 100%);
+            }
+            .btn-cta:active:not(:disabled) {
+              transform: translateY(0);
+            }
+            .btn-cta:disabled {
+              opacity: 0.7;
+              cursor: not-allowed;
+            }
+            .progress-track {
+              width: 100%;
+              height: 10px;
+              background: rgba(255, 255, 255, 0.1);
+              border-radius: 50px;
+              overflow: hidden;
+              margin-top: 18px;
+              position: relative;
+            }
+            .progress-fill {
+              height: 100%;
+              width: 100%;
+              background: linear-gradient(90deg, #f59e0b, #fbbf24, #f59e0b);
+              background-size: 200% 100%;
+              animation: moveStripes 1.5s linear infinite;
+            }
+            @keyframes moveStripes {
+              0% { background-position: 100% 0; }
+              100% { background-position: -100% 0; }
+            }
+            .spin-icon {
+              animation: spin 1.2s linear infinite;
+            }
+            @keyframes spin {
+              100% { transform: rotate(360deg); }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="ambient-orb-1"></div>
+          <div class="ambient-orb-2"></div>
+
+          <div class="update-card">
+            
+            <!-- Card Header -->
+            <div style="padding: 35px 35px 25px 35px; text-align: center; border-bottom: 1px solid rgba(255, 255, 255, 0.08);">
+              <div class="update-icon-circle mb-3">
+                <i class="bx bx-bolt-circle" style="font-size: 42px; color: #f59e0b;"></i>
+              </div>
+              <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-bottom: 12px;">
+                <span class="badge-warning-soft">
+                  <i class="bx bxs-shield-error me-1 font-size-16" style="font-size: 16px;"></i> จำเป็นต้องอัปเดตระบบก่อนใช้งาน (Mandatory Update)
+                </span>
+                <span class="badge-version">
+                  v<?= $currentVer ?> &rarr; v<?= $latestVer ?>
+                </span>
+              </div>
+              <h2 style="margin: 0 0 8px 0; font-size: 23px; font-weight: 700; color: #ffffff;">
+                ระบบมีเวอร์ชันใหม่ที่จำเป็นต้องอัปเดตก่อนเริ่มทำงาน
+              </h2>
+              <p style="margin: 0 auto; max-width: 650px; font-size: 14.5px; color: #cbd5e1; line-height: 1.6;">
+                เพื่อความถูกต้องในการคำนวณลูกหนี้ ความปลอดภัย และความเข้ากันได้กับฐานข้อมูล ระบบได้ล็อกการทำงานไว้ชั่วคราว กรุณาคลิกปุ่มด้านล่างเพื่ออัปเดตระบบเป็นเวอร์ชันล่าสุด
+              </p>
+            </div>
+
+            <!-- Card Body -->
+            <div style="padding: 30px 35px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
+                <span style="font-size: 14.5px; font-weight: 700; color: #fbbf24; display: flex; align-items: center;">
+                  <i class="bx bx-list-check me-1.5" style="font-size: 20px;"></i> รายการที่จะปรับปรุงในเวอร์ชัน v<?= $latestVer ?>:
+                </span>
+                <?php if ($relDate): ?>
+                  <span style="font-size: 13px; color: #94a3b8;"><i class="bx bx-calendar me-1"></i><?= $relDate ?></span>
+                <?php endif; ?>
+              </div>
+
+              <!-- Changes List -->
+              <div class="changes-container">
+                <h4 style="margin: 0 0 16px 0; font-size: 15.5px; font-weight: 600; color: #ffffff; line-height: 1.5;">
+                  <?= $title ?>
+                </h4>
+                <?php if (!empty($changes)): ?>
+                  <?php foreach ($changes as $ch): 
+                    $metaCat = get_changelog_category_meta($ch['category'] ?? '', $ch['tag'] ?? '');
+                    $colorClass = 'tag-' . ($metaCat['color'] ?? 'info');
+                    $tag = $ch['tag'] ?? $metaCat['tag'];
+                    $icon = $metaCat['icon'] ?? 'bx-check-circle';
+                    $desc = $ch['description'] ?? '';
+                  ?>
+                    <div class="change-item">
+                      <div>
+                        <span class="tag-badge <?= $colorClass ?>">
+                          <i class="bx <?= htmlspecialchars($icon) ?> me-1"></i><?= htmlspecialchars($tag) ?>
+                        </span>
+                      </div>
+                      <div style="font-size: 13.5px; color: #e2e8f0; line-height: 1.6; word-break: break-word;">
+                        <?= htmlspecialchars($desc) ?>
+                      </div>
+                    </div>
+                  <?php endforeach; ?>
+                <?php else: ?>
+                  <p style="color: #94a3b8; font-size: 13.5px; margin: 0;">ไม่มีรายละเอียดการเปลี่ยนแปลงย่อย</p>
+                <?php endif; ?>
+              </div>
+
+              <!-- Action Section -->
+              <div style="margin-top: 26px; text-align: center;">
+                <button id="btnMandatoryUpdate" class="btn-cta" onclick="executeMandatoryUpdate()">
+                  <i id="btnUpdateIcon" class="bx bx-refresh me-2 font-size-22" style="font-size: 22px;"></i>
+                  <span id="btnUpdateText">⚡ คลิกเพื่ออัปเดตระบบเดี๋ยวนี้ (ใช้เวลาประมาณ 5-10 วินาที)</span>
+                </button>
+
+                <div id="updateProgressContainer" style="display: none; margin-top: 18px;">
+                  <div class="progress-track">
+                    <div class="progress-fill"></div>
+                  </div>
+                  <div id="updateStatusText" style="margin-top: 10px; font-size: 13.5px; font-weight: 600; color: #fbbf24;">
+                    กำลังดึงไฟล์แพตช์จาก GitHub, สำรองข้อมูล และติดตั้งระบบ... กรุณารอสักครู่
+                  </div>
+                </div>
+
+                <div id="updateErrorContainer" style="display: none; margin-top: 15px; padding: 12px 16px; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 12px; color: #fca5a5; font-size: 13.5px;"></div>
+
+                <p style="margin: 16px 0 0 0; font-size: 12.5px; color: #64748b;">
+                  🔒 ปลอดภัย 100%: ระบบจะสำรองไฟล์เดิมอัตโนมัติ และไม่แตะต้องไฟล์คอนฟิก (config.php)
+                </p>
+              </div>
+
+            </div>
+
+          </div>
+
+          <script>
+          function executeMandatoryUpdate() {
+              var btn = document.getElementById('btnMandatoryUpdate');
+              var icon = document.getElementById('btnUpdateIcon');
+              var text = document.getElementById('btnUpdateText');
+              var progress = document.getElementById('updateProgressContainer');
+              var statusText = document.getElementById('updateStatusText');
+              var errorBox = document.getElementById('updateErrorContainer');
+
+              btn.disabled = true;
+              if (icon) icon.className = 'bx bx-loader-alt me-2 spin-icon';
+              if (text) text.innerText = 'กำลังดำเนินการอัปเดตระบบ...';
+              if (progress) progress.style.display = 'block';
+              if (errorBox) errorBox.style.display = 'none';
+
+              var formData = new FormData();
+              formData.append('action', 'apply');
+              formData.append('version', '<?= htmlspecialchars($latestVer) ?>');
+
+              fetch('api_update.php?action=apply', {
+                  method: 'POST',
+                  body: formData
+              })
+              .then(function(res) { return res.json(); })
+              .then(function(data) {
+                  if (data.success) {
+                      if (icon) icon.className = 'bx bx-check-circle me-2';
+                      if (text) text.innerText = 'อัปเดตระบบสำเร็จเรียบร้อยแล้ว!';
+                      if (statusText) statusText.innerHTML = '<span style="color: #4ade80;"><i class="bx bx-check-double me-1"></i>ติดตั้งแพตช์สำเร็จ! กำลังรีโหลดเข้าสู่ระบบ...</span>';
+                      setTimeout(function() {
+                          window.location.reload();
+                      }, 1000);
+                  } else {
+                      btn.disabled = false;
+                      if (icon) icon.className = 'bx bx-refresh me-2';
+                      if (text) text.innerText = 'ลองใหม่อีกครั้ง (คลิกเพื่ออัปเดต)';
+                      if (progress) progress.style.display = 'none';
+                      if (errorBox) {
+                          errorBox.innerText = data.message || 'เกิดข้อผิดพลาดในการอัปเดต กรุณาลองใหม่อีกครั้ง';
+                          errorBox.style.display = 'block';
+                      }
+                  }
+              })
+              .catch(function(err) {
+                  btn.disabled = false;
+                  if (icon) icon.className = 'bx bx-refresh me-2';
+                  if (text) text.innerText = 'ลองใหม่อีกครั้ง (คลิกเพื่ออัปเดต)';
+                  if (progress) progress.style.display = 'none';
+                  if (errorBox) {
+                      errorBox.innerText = 'การเชื่อมต่อขัดข้อง: ' + err.message;
+                      errorBox.style.display = 'block';
+                  }
+              });
+          }
+          </script>
+        </body>
+        </html>
+        <?php
+    }
+}
+
+/**
+ * ตรวจสอบและบังคับให้อัปเดตระบบก่อนเข้าใช้งาน (Mandatory System Update Enforcement)
+ * หากมีเวอร์ชันใหม่ จะล็อกหน้าจอไม่ให้ผู้ใช้เข้าถึงหรือทำงานในส่วนอื่นๆ จนกว่าจะกดอัปเดตระบบเรียบร้อย
+ */
+if (!function_exists('enforce_mandatory_system_update')) {
+    function enforce_mandatory_system_update() {
+        // ข้ามหากรันผ่าน CLI
+        if (php_sapi_name() === 'cli') return;
+
+        // สคริปต์ที่อนุญาตให้ผ่านได้โดยไม่ต้องบังคับอัปเดต
+        $script = strtolower(basename($_SERVER['SCRIPT_NAME'] ?? ''));
+        $exemptScripts = [
+            'login.php',
+            'login_2fa.php',
+            'logout.php',
+            'register.php',
+            'api_update.php',
+            'update_core.php',
+            'track.php'
+        ];
+        if (in_array($script, $exemptScripts)) return;
+
+        // โฟลเดอร์ที่ยกเว้น เช่น การตั้งค่าฐานข้อมูล
+        $requestUri = $_SERVER['REQUEST_URI'] ?? '';
+        if (strpos($requestUri, '/database_config/') !== false) return;
+
+        // ตรวจสอบการล็อกอิน (ถ้ายังไม่ล็อกอิน ให้ระบบพาไป login.php ตามปกติก่อน)
+        if (session_status() === PHP_SESSION_NONE) {
+            @session_start();
+        }
+        if (!isset($_SESSION['user_id'])) return;
+
+        // Emergency Admin Bypass Parameter (กรณีฉุกเฉินเฉพาะ Admin สำหรับกู้คืนระบบ)
+        if (isset($_GET['bypass_update']) && $_GET['bypass_update'] === '1' && isset($_SESSION['role']) && $_SESSION['role'] === 'admin') {
+            return;
+        }
+
+        // ตรวจสอบว่ามีเวอร์ชันใหม่หรือไม่
+        $updateInfo = check_system_update_available();
+        if (empty($updateInfo['available']) || empty($updateInfo['latest_version'])) {
+            return;
+        }
+
+        // หากเป็น Request แบบ AJAX หรือ API ให้ตอบกลับด้วย HTTP 426 (Upgrade Required) ป้องกันการบันทึกข้อมูลผิดพลาด
+        $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest')
+                  || (!empty($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'application/json') !== false)
+                  || (!empty($_POST) && (isset($_POST['action']) || isset($_POST['action_save_partial'])));
+                  
+        if ($isAjax && $script !== 'api_update.php') {
+            header('Content-Type: application/json; charset=UTF-8');
+            http_response_code(426); // Upgrade Required
+            echo json_encode([
+                'success' => false,
+                'status' => 'error',
+                'update_required' => true,
+                'current_version' => $updateInfo['current_version'],
+                'latest_version' => $updateInfo['latest_version'],
+                'message' => 'ระบบมีเวอร์ชันใหม่ที่จำเป็นต้องอัปเดตก่อนทำรายการ กรุณารีเฟรชหน้าจอเพื่อทำการอัปเดต'
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        // แสดงหน้าจอบังคับอัปเดตระบบ (Mandatory Update Lock Screen)
+        render_mandatory_update_screen($updateInfo);
+        exit;
+    }
+}
+
+// เรียกทำงานตรวจสอบและบังคับอัปเดตระบบอัตโนมัติ
+enforce_mandatory_system_update();
 ?>

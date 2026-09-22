@@ -87,13 +87,12 @@ if ($action === 'check') {
 }
 
 if ($action === 'apply') {
-    // ผู้สั่งอัปเดตควรเป็น Admin หรือมีสิทธิ์
-    $userRole = $_SESSION['role'] ?? 'user';
-    if ($userRole !== 'admin') {
-        http_response_code(403);
+    // ผู้สั่งอัปเดตต้องเข้าสู่ระบบแล้ว (รองรับการบังคับอัปเดตทั้งระบบ)
+    if (!isset($_SESSION['user_id'])) {
+        http_response_code(401);
         echo json_encode([
             'success' => false,
-            'message' => 'เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่สามารถสั่งอัปเดตระบบได้'
+            'message' => 'กรุณาเข้าสู่ระบบก่อนดำเนินการ'
         ], JSON_UNESCAPED_UNICODE);
         exit;
     }
