@@ -1,6 +1,11 @@
 <?php
 // system/database_config/db_helper.php
 
+// ปิด strict reporting ของ mysqli สำหรับ PHP 8.1 - 8.3 ให้ทำงานเสถียรเหมือน PHP 7.x ป้องกัน HTTP 500
+if (function_exists('mysqli_report')) {
+    @mysqli_report(MYSQLI_REPORT_OFF);
+}
+
 // โหลดค่า config ถ้ามีการรวมไฟล์นี้เข้ามา (เพื่อไม่ให้ซ้ำซ้อนกับ config.php)
 if (!isset($configData)) {
     $config_file = __DIR__ . "/config.json";
