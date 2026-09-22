@@ -6,6 +6,31 @@
   "min_php_version": "7.4.0",
   "has_database_update": false,
   "changelog_summary": [
-    "แก้ไขและเพิ่มระบบ Auto-Migration ตาราง imr_tb_payment_history และปรับปรุง Date Handling รองรับ Ubuntu PHP 8.3 / MySQL 8.0 Strict Mode ป้องกัน Error 500 ตอนแบ่งจ่ายลูกหนี้รายตัว"
+    "เพิ่มฟังก์ชัน ensure_payment_history_table() ตรวจสอบและสร้างตาราง imr_tb_payment_history ให้อัตโนมัติ ป้องกัน Error 500",
+    "ปรับปรุง parse_bill_date_to_sql() จัดการวันที่ชำระเงินส่งค่าเป็น SQL NULL รองรับ MySQL 8.0 Strict Mode",
+    "เพิ่ม mysqli_report(MYSQLI_REPORT_OFF) ใน db_helper.php และครอบ try-catch Throwable ป้องกัน Uncaught Exception บน PHP 8.3"
+  ],
+  "changes": [
+    {
+      "category": "feature",
+      "tag": "Zero-Config Auto-Migration (ตารางแบ่งจ่าย)",
+      "color": "success",
+      "icon": "bx-data",
+      "description": "เพิ่มฟังก์ชัน ensure_payment_history_table() ใน system/database_config/db_helper.php และ datatimestamp-insert2.php ตรวจสอบและสร้างตาราง imr_tb_payment_history พร้อมดัชนี (Indexes) ให้อัตโนมัติทันทีเมื่อ รพ. อื่นอัปเดตระบบ โดยไม่ต้องรันคำสั่ง SQL ใน phpMyAdmin เอง"
+    },
+    {
+      "category": "fix",
+      "tag": "รองรับ MySQL 8.0 Strict Mode และ PHP 8.3",
+      "color": "danger",
+      "icon": "bx-calendar-check",
+      "description": "ปรับปรุงฟังก์ชัน parse_bill_date_to_sql() จัดการวันที่ชำระเงินส่งค่าเป็น SQL NULL เมื่อไม่มีการระบุวันที่ แก้ไขปัญหา Fatal Error 'Incorrect date value: empty string for column bill_date' บน Ubuntu MySQL 8 Strict Mode อย่างถาวร"
+    },
+    {
+      "category": "improve",
+      "tag": "ความเข้ากันได้กับ PHP 8.1 - 8.3 และ PHP 7.x",
+      "color": "primary",
+      "icon": "bx-check-shield",
+      "description": "กำหนดโหมด MYSQLI_REPORT_OFF ใน db_helper.php และครอบบล็อกคำสั่งแบ่งจ่ายด้วย try-catch Throwable ป้องกัน Uncaught mysqli_sql_exception และส่งข้อความแจ้งเตือนที่ชัดเจนกลับสู่หน้าจอ รองรับทั้ง Windows XAMPP (PHP 7/8) และ Linux Ubuntu Server"
+    }
   ]
 }

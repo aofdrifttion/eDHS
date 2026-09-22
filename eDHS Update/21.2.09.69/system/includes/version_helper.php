@@ -56,11 +56,84 @@ if (!function_exists('get_system_version_date')) {
 }
 
 if (!function_exists('get_system_changelog')) {
-    function get_system_changelog() {
+    function get_system_changelog($includeUpcoming = true) {
         $data = get_system_version_data();
-        return isset($data['releases']) && is_array($data['releases']) 
+        $releases = isset($data['releases']) && is_array($data['releases']) 
             ? $data['releases'] 
             : [];
+
+        if (!$includeUpcoming) {
+            return $releases;
+        }
+
+        // ตรวจสอบว่ามีเวอร์ชันใหม่ที่ยังไม่ได้ติดตั้งหรือไม่
+        $updateInfo = check_system_update_available();
+        if (!empty($updateInfo['available']) && !empty($updateInfo['latest_version'])) {
+            $latestVer = $updateInfo['latest_version'];
+            
+            // เช็คว่าใน releases มีเวอร์ชันนี้แล้วหรือยัง
+            $alreadyExists = false;
+            foreach ($releases as $r) {
+                if (isset($r['version']) && $r['version'] === $latestVer) {
+                    $alreadyExists = true;
+                    break;
+                }
+            }
+
+            if (!$alreadyExists) {
+                $baseDir = dirname(__DIR__, 2);
+                $upcomingRelease = null;
+
+                // 1. ดึงจาก eDHS Update/{$latestVer}/system/database_config/changelog.json
+                $patchChangelogPath = $baseDir . '/eDHS Update/' . $latestVer . '/system/database_config/changelog.json';
+                if (file_exists($patchChangelogPath)) {
+                    $patchData = json_decode(@file_get_contents($patchChangelogPath), true);
+                    if (!empty($patchData['releases']) && is_array($patchData['releases'])) {
+                        foreach ($patchData['releases'] as $pr) {
+                            if (isset($pr['version']) && $pr['version'] === $latestVer) {
+                                $upcomingRelease = $pr;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // 2. ถ้ายังไม่พบ ให้ดึงจาก version.json หรือ meta
+                if (!$upcomingRelease) {
+                    $meta = $updateInfo['meta'] ?? [];
+                    $changes = [];
+                    if (!empty($meta['changes']) && is_array($meta['changes'])) {
+                        $changes = $meta['changes'];
+                    } elseif (!empty($meta['changelog_summary']) && is_array($meta['changelog_summary'])) {
+                        foreach ($meta['changelog_summary'] as $sumText) {
+                            $changes[] = [
+                                'category' => 'improve',
+                                'tag' => 'รายการปรับปรุง',
+                                'color' => 'success',
+                                'icon' => 'bx-check-circle',
+                                'description' => $sumText
+                            ];
+                        }
+                    }
+
+                    $upcomingRelease = [
+                        'version' => $latestVer,
+                        'date' => $meta['release_date'] ?? date('Y-m-d'),
+                        'title' => $meta['title'] ?? "การปรับปรุงระบบ (v$latestVer)",
+                        'type' => 'feature',
+                        'badge' => 'bg-warning',
+                        'changes' => $changes
+                    ];
+                }
+
+                if ($upcomingRelease) {
+                    $upcomingRelease['is_upcoming'] = true;
+                    array_unshift($releases, $upcomingRelease);
+                }
+            }
+        }
+
+        return $releases;
     }
 }
 
@@ -265,6 +338,75 @@ if (!function_exists('render_update_notification_banner')) {
                         
                         container.style.display = 'block';
                     }
+
+                    // อัปเดตข้อมูลใน Modal รายละเอียดการปรับปรุง (Changelog Modal)
+                    if (data.upcoming_release) {
+                        var cardId = 'card-release-' + data.latest_version;
+                        var existingCard = document.getElementById(cardId);
+                        var changelogContainer = document.querySelector('#changelogModal .changelog-container');
+                        if (!existingCard && changelogContainer) {
+                            var rel = data.upcoming_release;
+                            var changesHtml = '';
+                            if (rel.changes && rel.changes.length > 0) {
+                                rel.changes.forEach(function(ch) {
+                                    var tag = ch.tag || 'ปรับปรุง';
+                                    var desc = ch.description || '';
+                                    var icon = ch.icon || 'bx-check-circle';
+                                    var badgeColor = ch.color || 'info';
+                                    var colorMap = {
+                                        'success': 'background-color: #e8fadf; color: #28a745; border: 1px solid #c3e6cb;',
+                                        'danger':  'background-color: #ffeef0; color: #dc3545; border: 1px solid #f5c6cb;',
+                                        'warning': 'background-color: #fff8e6; color: #ff9800; border: 1px solid #ffeeba;',
+                                        'primary': 'background-color: #ebeefe; color: #696cff; border: 1px solid #d4dafd;',
+                                        'info':    'background-color: #e7f7ff; color: #007bff; border: 1px solid #b8daff;'
+                                    };
+                                    var bStyle = colorMap[badgeColor] || colorMap['info'];
+                                    changesHtml += '<div class="p-3 rounded-3" style="background-color: #f8fafc; border: 1px solid #e2e8f0;">' +
+                                        '<div class="d-flex align-items-center gap-2 mb-2 flex-wrap">' +
+                                          '<span class="badge rounded-pill px-2.5 py-1 d-inline-flex align-items-center fw-bold" style="' + bStyle + ' font-size: 12px;">' +
+                                            '<i class="bx ' + icon + ' me-1"></i>' + tag +
+                                          '</span>' +
+                                        '</div>' +
+                                        '<div class="text-secondary ps-1" style="font-size: 13.5px; line-height: 1.65; word-break: break-word;">' +
+                                          desc +
+                                        '</div>' +
+                                      '</div>';
+                                });
+                            } else {
+                                changesHtml = '<p class="text-muted mb-0 py-2" style="font-size: 13px;">ไม่มีรายละเอียดการเปลี่ยนแปลงย่อย</p>';
+                            }
+
+                            var newCardHtml = '<div class="card mb-4 border-0 shadow-sm" id="' + cardId + '" style="border-radius: 14px; overflow: hidden; border-left: 5px solid #ff9800 !important; background: #fffdf5;">' +
+                                '<div class="card-header bg-white pt-3 pb-3 px-4 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2" style="border-color: #ffeeba !important;">' +
+                                  '<div class="d-flex align-items-center gap-2 flex-wrap">' +
+                                    '<span class="badge bg-warning text-dark rounded-pill px-3 py-1.5 fw-bold shadow-xs" style="font-size: 13.5px;">' +
+                                      '<i class="bx bx-bell-ring me-1"></i>v' + rel.version + ' (เวอร์ชั่นใหม่ที่จะปรับปรุง)' +
+                                    '</span>' +
+                                    '<span class="badge rounded-pill px-2.5 py-1 fw-bold shadow-xs" style="background-color: #ffeeba; color: #856404; font-size: 11.5px;">' +
+                                      '<i class="bx bx-up-arrow-circle me-1"></i>พร้อมติดตั้ง' +
+                                    '</span>' +
+                                  '</div>' +
+                                  '<div class="d-flex align-items-center gap-2">' +
+                                    '<span class="text-muted" style="font-size: 13px;"><i class="bx bx-calendar me-1 text-primary"></i>' + (rel.date || '') + '</span>' +
+                                    '<button type="button" class="btn btn-warning btn-sm rounded-pill px-3 py-1 fw-bold text-dark d-inline-flex align-items-center shadow-xs" onclick="triggerSystemUpdate(\'' + rel.version + '\')">' +
+                                      '<i class="bx bx-refresh me-1 font-size-16"></i>อัปเดตระบบเดี๋ยวนี้ ⚡' +
+                                    '</button>' +
+                                  '</div>' +
+                                '</div>' +
+                                '<div class="px-4 pt-3 pb-2 bg-white">' +
+                                  '<h6 class="fw-bold text-dark mb-0" style="font-size: 14.5px; line-height: 1.6;">' + (rel.title || '') + '</h6>' +
+                                '</div>' +
+                                '<div class="card-body px-4 py-3" style="background-color: #ffffff;">' +
+                                  '<div class="d-flex align-items-center mb-3">' +
+                                    '<span class="fw-bold text-dark" style="font-size: 13.5px;"><i class="bx bx-list-check me-1 text-warning font-size-18"></i>รายการที่จะปรับปรุงในเวอร์ชั่นนี้:</span>' +
+                                  '</div>' +
+                                  '<div class="d-flex flex-column gap-3">' + changesHtml + '</div>' +
+                                '</div>' +
+                              '</div>';
+
+                            changelogContainer.insertAdjacentHTML('afterbegin', newCardHtml);
+                        }
+                    }
                 }
             })
             .catch(function(err) {
@@ -360,29 +502,49 @@ if (!function_exists('render_changelog_modal')) {
                 <?php else: ?>
                   <div class="changelog-container">
                     <?php foreach ($releases as $index => $rel): 
-                      $isLatest = ($index === 0);
                       $relVersion = $rel['version'] ?? '-';
+                      $isUpcoming = !empty($rel['is_upcoming']);
+                      $isCurrent = ($relVersion === $version && !$isUpcoming);
                       $relDate = isset($rel['date']) ? format_changelog_date($rel['date']) : '';
                       $relTitle = $rel['title'] ?? 'การปรับปรุงระบบ';
                       $changes = $rel['changes'] ?? [];
+                      $cardBorder = $isUpcoming 
+                          ? 'border-left: 5px solid #ff9800 !important; background-color: #fffdf5;' 
+                          : ($isCurrent ? 'border-left: 5px solid #696cff !important;' : 'border-left: 5px solid #94a3b8 !important;');
                     ?>
-                      <div class="card mb-4 border-0 shadow-sm" style="border-radius: 14px; overflow: hidden; border-left: 5px solid <?= $isLatest ? '#696cff' : '#94a3b8'; ?> !important;">
+                      <div class="card mb-4 border-0 shadow-sm" id="card-release-<?= htmlspecialchars($relVersion); ?>" style="border-radius: 14px; overflow: hidden; <?= $cardBorder; ?>">
                         
                         <!-- Version Header -->
-                        <div class="card-header bg-white pt-3 pb-3 px-4 border-bottom" style="border-color: #e2e8f0 !important;">
+                        <div class="card-header bg-white pt-3 pb-3 px-4 border-bottom" style="border-color: <?= $isUpcoming ? '#ffeeba' : '#e2e8f0'; ?> !important;">
                           <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
-                            <div class="d-flex align-items-center gap-2">
-                              <span class="badge <?= $isLatest ? 'bg-primary' : 'bg-secondary'; ?> rounded-pill px-3 py-1.5 fw-bold shadow-xs" style="font-size: 13.5px; letter-spacing: 0.5px;">
-                                <i class="bx bx-git-commit me-1"></i>v<?= htmlspecialchars($relVersion); ?>
-                              </span>
-                              <?php if ($isLatest): ?>
-                                <span class="badge rounded-pill px-2.5 py-1 fw-semibold shadow-xs" style="background-color: #e8fadf; color: #28a745; font-size: 11.5px;">
-                                  <i class="bx bx-star me-1"></i>เวอร์ชั่นปัจจุบัน
+                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                              <?php if ($isUpcoming): ?>
+                                <span class="badge bg-warning text-dark rounded-pill px-3 py-1.5 fw-bold shadow-xs" style="font-size: 13.5px; letter-spacing: 0.5px;">
+                                  <i class="bx bx-bell-ring me-1"></i>v<?= htmlspecialchars($relVersion); ?> (เวอร์ชั่นใหม่ที่จะปรับปรุง)
                                 </span>
+                                <span class="badge rounded-pill px-2.5 py-1 fw-bold shadow-xs" style="background-color: #ffeeba; color: #856404; font-size: 11.5px;">
+                                  <i class="bx bx-up-arrow-circle me-1"></i>พร้อมติดตั้ง
+                                </span>
+                              <?php else: ?>
+                                <span class="badge <?= $isCurrent ? 'bg-primary' : 'bg-secondary'; ?> rounded-pill px-3 py-1.5 fw-bold shadow-xs" style="font-size: 13.5px; letter-spacing: 0.5px;">
+                                  <i class="bx bx-git-commit me-1"></i>v<?= htmlspecialchars($relVersion); ?>
+                                </span>
+                                <?php if ($isCurrent): ?>
+                                  <span class="badge rounded-pill px-2.5 py-1 fw-semibold shadow-xs" style="background-color: #e8fadf; color: #28a745; font-size: 11.5px;">
+                                    <i class="bx bx-star me-1"></i>เวอร์ชั่นปัจจุบันที่ใช้งานอยู่
+                                  </span>
+                                <?php endif; ?>
                               <?php endif; ?>
                             </div>
-                            <div class="text-muted d-flex align-items-center" style="font-size: 13px;">
-                              <i class="bx bx-calendar me-1.5 text-primary"></i><?= $relDate; ?>
+                            <div class="d-flex align-items-center gap-2">
+                              <div class="text-muted d-flex align-items-center" style="font-size: 13px;">
+                                <i class="bx bx-calendar me-1.5 text-primary"></i><?= $relDate; ?>
+                              </div>
+                              <?php if ($isUpcoming): ?>
+                                <button type="button" class="btn btn-warning btn-sm rounded-pill px-3 py-1 fw-bold text-dark d-inline-flex align-items-center shadow-xs" onclick="triggerSystemUpdate('<?= htmlspecialchars($relVersion) ?>')">
+                                  <i class="bx bx-refresh me-1 font-size-16"></i>อัปเดตระบบเดี๋ยวนี้ ⚡
+                                </button>
+                              <?php endif; ?>
                             </div>
                           </div>
                           <h6 class="fw-bold text-dark mb-0" style="font-size: 14.5px; line-height: 1.6;">
@@ -392,6 +554,11 @@ if (!function_exists('render_changelog_modal')) {
 
                         <!-- Changes Items -->
                         <div class="card-body px-4 py-3" style="background-color: #ffffff;">
+                          <?php if ($isUpcoming): ?>
+                            <div class="d-flex align-items-center mb-3">
+                              <span class="fw-bold text-dark" style="font-size: 13.5px;"><i class="bx bx-list-check me-1 text-warning font-size-18"></i>รายการที่จะปรับปรุงในเวอร์ชั่นนี้:</span>
+                            </div>
+                          <?php endif; ?>
                           <?php if (!empty($changes)): ?>
                             <div class="d-flex flex-column gap-3">
                               <?php foreach ($changes as $change): 

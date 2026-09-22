@@ -36,11 +36,50 @@ if ($action === 'check') {
         $updateAvailable = true;
     }
 
+    $upcomingRelease = null;
+    if ($updateAvailable) {
+        $patchChangelog = $baseDir . '/eDHS Update/' . $latestVersion . '/system/database_config/changelog.json';
+        if (file_exists($patchChangelog)) {
+            $pData = json_decode(@file_get_contents($patchChangelog), true);
+            if (!empty($pData['releases'])) {
+                foreach ($pData['releases'] as $pr) {
+                    if (isset($pr['version']) && $pr['version'] === $latestVersion) {
+                        $upcomingRelease = $pr;
+                        break;
+                    }
+                }
+            }
+        }
+        if (!$upcomingRelease && !empty($meta)) {
+            $changes = [];
+            if (!empty($meta['changes']) && is_array($meta['changes'])) {
+                $changes = $meta['changes'];
+            } elseif (!empty($meta['changelog_summary']) && is_array($meta['changelog_summary'])) {
+                foreach ($meta['changelog_summary'] as $sumText) {
+                    $changes[] = [
+                        'category' => 'improve',
+                        'tag' => 'รายการปรับปรุง',
+                        'color' => 'success',
+                        'icon' => 'bx-check-circle',
+                        'description' => $sumText
+                    ];
+                }
+            }
+            $upcomingRelease = [
+                'version' => $latestVersion,
+                'date'    => $meta['release_date'] ?? date('Y-m-d'),
+                'title'   => $meta['title'] ?? "อัปเดตเวอร์ชัน $latestVersion",
+                'changes' => $changes
+            ];
+        }
+    }
+
     echo json_encode([
         'success'          => true,
         'current_version'  => $currentVersion,
         'latest_version'   => $latestVersion,
         'update_available' => $updateAvailable,
+        'upcoming_release' => $upcomingRelease,
         'meta'             => $meta,
         'git_available'    => (find_git_binary() !== null)
     ], JSON_UNESCAPED_UNICODE);
