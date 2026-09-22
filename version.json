@@ -1,50 +1,44 @@
 {
-  "latest_version": "21.2.09.69",
+  "latest_version": "21.3.09.69",
   "release_date": "2026-09-22",
-  "title": "ปรับปรุงระบบแบ่งจ่ายลูกหนี้รายตัวและ Auto-Migration (v21.2.09.69)",
-  "patch_folder": "21.2.09.69",
+  "title": "ปรับปรุงความปลอดภัยโครงสร้างตารางแบ่งจ่าย, ปลดล็อกสิทธิ์อัปเดตระบบ และเปิดปุ่มแนบใบเสร็จ (v21.3.09.69)",
+  "patch_folder": "21.3.09.69",
   "min_php_version": "7.4.0",
-  "has_database_update": false,
+  "has_database_update": true,
   "changelog_summary": [
-    "เพิ่มฟังก์ชัน ensure_payment_history_table() ตรวจสอบและสร้างตาราง imr_tb_payment_history ให้อัตโนมัติ ป้องกัน Error 500",
-    "ปรับปรุง parse_bill_date_to_sql() จัดการวันที่ชำระเงินส่งค่าเป็น SQL NULL รองรับ MySQL 8.0 Strict Mode",
-    "เพิ่ม mysqli_report(MYSQLI_REPORT_OFF) ใน db_helper.php และครอบ try-catch Throwable ป้องกัน Uncaught Exception บน PHP 8.3"
+    "แก้ปัญหา Unknown column 'accountcode' ในตาราง imr_tb_payment_history ด้วย Defensive Auto-Migration",
+    "เปิดสิทธิ์ให้ทุกคนสามารถตรวจสอบและสั่งอัปเดตระบบได้ทันที (Universal Update)",
+    "เปิดปุ่มแนบใบเสร็จในหน้าต่าง Modal หน้า VlookUP.php ให้ทุกผู้ใช้มองเห็นและใช้งานได้",
+    "เพิ่มปุ่มรีอัปเดตระบบในหน้าต่าง Changelog Modal รองรับการบังคับดึงแพตช์ซ้ำตลอดเวลา"
   ],
   "changes": [
     {
-      "category": "feature",
-      "tag": "Zero-Config Auto-Migration (ตารางแบ่งจ่าย)",
-      "color": "success",
+      "category": "fix",
+      "tag": "แก้ Unknown column 'accountcode' (Auto-Migration)",
+      "color": "danger",
       "icon": "bx-data",
-      "description": "เพิ่มฟังก์ชัน ensure_payment_history_table() ใน system/database_config/db_helper.php และ datatimestamp-insert2.php ตรวจสอบและสร้างตาราง imr_tb_payment_history พร้อมดัชนี (Indexes) ให้อัตโนมัติทันทีเมื่อ รพ. อื่นอัปเดตระบบ โดยไม่ต้องรันคำสั่ง SQL ใน phpMyAdmin เอง"
+      "description": "ยกระดับฟังก์ชัน ensure_payment_history_table() ใน db_helper.php ให้สแกนและเพิ่มคอลัมน์ accountcode, bill_date, patient_type, bill_no, note และสร้าง Index idx_accountcode อัตโนมัติทันทีหากตรวจพบว่าตารางเดิมใน รพ. อื่นสร้างไว้ไม่ครบ ป้องกัน Error Unknown column 'accountcode' in 'INSERT INTO' อย่างเด็ดขาด"
     },
     {
-      "category": "fix",
-      "tag": "รองรับ MySQL 8.0 Strict Mode และ PHP 8.3",
-      "color": "danger",
-      "icon": "bx-calendar-check",
-      "description": "ปรับปรุงฟังก์ชัน parse_bill_date_to_sql() จัดการวันที่ชำระเงินส่งค่าเป็น SQL NULL เมื่อไม่มีการระบุวันที่ แก้ไขปัญหา Fatal Error 'Incorrect date value: empty string for column bill_date' บน Ubuntu MySQL 8 Strict Mode อย่างถาวร"
+      "category": "feature",
+      "tag": "เปิดสิทธิ์ให้ทุกคนอัปเดตระบบได้ (Universal Update)",
+      "color": "success",
+      "icon": "bx-user-check",
+      "description": "ปลดล็อกเงื่อนไขใน api_update.php และ enforce_mandatory_system_update() ให้ผู้ใช้และเจ้าหน้าที่ทุกคนสามารถตรวจสอบและกดอัปเดตระบบได้ทันที แม้ยังไม่ได้ล็อกอินหรือไม่ได้ระบุสิทธิ์แอดมิน เพื่อความราบรื่นในการทำงาน"
+    },
+    {
+      "category": "feature",
+      "tag": "เปิดปุ่มแนบใบเสร็จใน VlookUP.php สำหรับทุก User",
+      "color": "info",
+      "icon": "bx-receipt",
+      "description": "ปลดล็อกปุ่ม 'แนบใบเสร็จ' ในหน้าต่าง Modal ตัดลูกหนี้ตามยอด Statement REP NO และผู้ป่วยไต DCKD (หน้า VlookUP.php) ให้ผู้ใช้ทุกสิทธิ์มองเห็นและกดใช้งานได้ทันที"
     },
     {
       "category": "improve",
-      "tag": "ความเข้ากันได้กับ PHP 8.1 - 8.3 และ PHP 7.x",
-      "color": "primary",
-      "icon": "bx-check-shield",
-      "description": "กำหนดโหมด MYSQLI_REPORT_OFF ใน db_helper.php และครอบบล็อกคำสั่งแบ่งจ่ายด้วย try-catch Throwable ป้องกัน Uncaught mysqli_sql_exception และส่งข้อความแจ้งเตือนที่ชัดเจนกลับสู่หน้าจอ รองรับทั้ง Windows XAMPP (PHP 7/8) และ Linux Ubuntu Server"
-    },
-    {
-      "category": "feature",
-      "tag": "ระบบแสดงรายการปรับปรุงล่วงหน้าก่อนอัปเดต (Changelog Preview)",
-      "color": "info",
-      "icon": "bx-list-check",
-      "description": "ปรับปรุงหน้าต่างดูรายละเอียด (Changelog Modal) ให้ดึงรายการเปลี่ยนแปลงของเวอร์ชันใหม่ล่วงหน้ามาแสดงผลบนสุด พร้อมป้ายแจ้งเตือนสีส้มทอง และปุ่มกดอัปเดตได้ทันที"
-    },
-    {
-      "category": "security",
-      "tag": "ระบบบังคับอัปเดตระบบก่อนเข้าใช้งาน (Mandatory Update Gate)",
+      "tag": "ระบบรีอัปเดตซ้ำ (Force Re-update Support)",
       "color": "warning",
-      "icon": "bx-shield-quarter",
-      "description": "หากระบบตรวจพบว่ามีเวอร์ชันใหม่ จะล็อกหน้าจอไม่ให้ผู้ใช้เข้าถึงหรือทำงานในส่วนอื่นๆ จนกว่าจะกดอัปเดตระบบเรียบร้อย พร้อมบล็อก API ด้วย HTTP 426 เพื่อป้องกันข้อผิดพลาดและความไม่สอดคล้องของข้อมูล"
+      "icon": "bx-refresh",
+      "description": "เพิ่มปุ่ม 'รีอัปเดต' ในหน้าต่าง Changelog Modal และรองรับพารามิเตอร์ force=1 ใน api_update.php เพื่อให้เครื่องที่อัปเดตเวอร์ชันล่าสุดไปแล้วสามารถดึงโค้ดและติดตั้งแพตช์ซ้ำได้ตลอดเวลา"
     }
   ]
 }
