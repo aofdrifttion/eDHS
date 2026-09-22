@@ -221,12 +221,9 @@ if (!function_exists('render_update_notification_banner')) {
                       <small class="text-white-50" id="bannerRelDate" style="font-size: 11.5px;"><i class="bx bx-calendar me-1"></i><?= $relDate ?></small>
                     <?php endif; ?>
                   </div>
-                  <h5 class="text-white mb-1 fw-bold" id="bannerTitle" style="font-size: 16px;">
+                  <h5 class="text-white mb-0 fw-bold" id="bannerTitle" style="font-size: 16px;">
                     <?= $title ?>
                   </h5>
-                  <small class="text-white-50 d-block" style="font-size: 12.5px;">
-                    ระบบจะดึงไฟล์จาก Git, สำรองไฟล์เดิมอัตโนมัติ และไม่แตะต้องไฟล์คอนฟิก (config.php)
-                  </small>
                 </div>
               </div>
               <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">

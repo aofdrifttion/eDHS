@@ -295,12 +295,36 @@ if (!function_exists('ensure_payment_history_table')) {
 
         try {
             mysqli_query($conn, $sql);
+
+            // ตรวจสอบและเพิ่มคอลัมน์ bill_date อัตโนมัติ กรณีที่เครื่องปลายทางเคยสร้างตารางไว้ในเวอร์ชันเก่า
+            $col_chk = @mysqli_query($conn, "SHOW COLUMNS FROM `imr_tb_payment_history` LIKE 'bill_date'");
+            if ($col_chk && mysqli_num_rows($col_chk) == 0) {
+                @mysqli_query($conn, "ALTER TABLE `imr_tb_payment_history` ADD COLUMN `bill_date` DATE DEFAULT NULL COMMENT 'วันที่ตามใบเสร็จ' AFTER `bill_no`");
+            }
+
             $checked = true;
             return true;
         } catch (\Throwable $e) {
             error_log("ensure_payment_history_table error: " . $e->getMessage());
             return false;
         }
+    }
+}
+
+/**
+ * จัดรูปแบบวันที่ SQL (YYYY-MM-DD ค.ศ.) เป็นวันที่ไทย (DD/MM/YYYY พ.ศ.)
+ * คืนค่าว่าง '' หากไม่มีข้อมูลหรือเป็น '0000-00-00' ป้องกัน Error หรือการแสดงผลปี 2513
+ */
+if (!function_exists('format_sql_date_to_th')) {
+    function format_sql_date_to_th($dateStr) {
+        if (empty($dateStr) || $dateStr === '0000-00-00' || strpos((string)$dateStr, '0000') !== false) {
+            return '';
+        }
+        $ts = strtotime((string)$dateStr);
+        if (!$ts) return '';
+        $y = (int)date('Y', $ts);
+        if ($y < 1900) return '';
+        return date('d/m/', $ts) . ($y + 543);
     }
 }
 ?>

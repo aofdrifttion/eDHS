@@ -3063,7 +3063,7 @@ input[type="checkbox"] {
           $('#pp_history_id').val(id);
           $('#pp_amount').val(amount);
           $('#pp_bill_no').val(bill_no);
-          $('#pp_bill_date').val(bill_date);
+          $('#pp_bill_date').val(bill_date === '-' ? '' : bill_date);
           $('#pp_note').val(note);
 
           // แยก bill_no ลง input หน้า/หลัง
