@@ -1,11 +1,11 @@
 {
-  "latest_version": "21.1.09.69",
-  "release_date": "2026-09-21",
-  "title": "ทดสอบระบบอัปเดตแพตช์อัตโนมัติผ่าน Git (v21.1.09.69)",
-  "patch_folder": "21.1.09.69",
+  "latest_version": "21.2.09.69",
+  "release_date": "2026-09-22",
+  "title": "ปรับปรุงระบบแบ่งจ่ายลูกหนี้รายตัวและ Auto-Migration (v21.2.09.69)",
+  "patch_folder": "21.2.09.69",
   "min_php_version": "7.4.0",
   "has_database_update": false,
   "changelog_summary": [
-    "ทดสอบการดึงข้อมูลและติดตั้งแพตช์อัตโนมัติผ่าน Git สำเร็จสมบูรณ์ 100%"
+    "แก้ไขและเพิ่มระบบ Auto-Migration ตาราง imr_tb_payment_history และปรับปรุง Date Handling รองรับ Ubuntu PHP 8.3 / MySQL 8.0 Strict Mode ป้องกัน Error 500 ตอนแบ่งจ่ายลูกหนี้รายตัว"
   ]
 }
