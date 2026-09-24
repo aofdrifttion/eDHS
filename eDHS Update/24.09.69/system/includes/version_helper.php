@@ -248,7 +248,7 @@ if (!function_exists('check_system_update_available')) {
         }
         
         $latestVersion = $latestMeta['latest_version'];
-        $hasUpdate = ($latestVersion !== $currentVersion && $latestVersion !== '00.00.00');
+        $hasUpdate = (version_compare($latestVersion, $currentVersion, '>') || ($currentVersion === '00.00.00' && $latestVersion !== '00.00.00'));
         
         return [
             'available'       => $hasUpdate,

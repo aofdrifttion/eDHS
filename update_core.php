@@ -332,42 +332,60 @@ function download_patch_from_github($baseDir, $targetVersion = null) {
  * ดึงข้อมูลเวอร์ชันล่าสุดจาก Remote GitHub หรือ Local version.json
  */
 function get_latest_version_meta($baseDir, $checkRemote = true) {
-    // 1. ตรวจสอบจาก GitHub Remote ก่อน (ถ้ามี Git)
+    $candidates = [];
+
+    // 1. ตรวจสอบจาก version.json ในเครื่องก่อนเสมอ
+    $versionJsonPath = $baseDir . '/version.json';
+    if (file_exists($versionJsonPath)) {
+        $content = @file_get_contents($versionJsonPath);
+        if ($content !== false) {
+            $content = preg_replace('/^\xEF\xBB\xBF/', '', $content);
+            $localData = json_decode($content, true);
+            if (!empty($localData['latest_version'])) {
+                $candidates[] = $localData;
+            }
+        }
+    }
+
+    // 2. ตรวจสอบจาก GitHub Remote (ถ้าเปิด checkRemote)
     if ($checkRemote) {
         $remoteData = git_fetch_remote_meta($baseDir);
         if ($remoteData && !empty($remoteData['latest_version'])) {
-            return $remoteData;
-        }
-
-        // 2. ถ้าไม่มี Git ให้เช็คผ่าน HTTP จาก GitHub โดยตรง
-        $httpData = http_fetch_remote_version($baseDir);
-        if ($httpData && !empty($httpData['latest_version'])) {
-            return $httpData;
-        }
-    }
-
-    // 3. ถ้าต่อเน็ตไม่ได้หรือไม่มี Git ให้ดูจาก version.json ในเครื่อง
-    $versionJsonPath = $baseDir . '/version.json';
-    if (file_exists($versionJsonPath)) {
-        $data = json_decode(@file_get_contents($versionJsonPath), true);
-        if (!empty($data['latest_version'])) {
-            return $data;
+            $candidates[] = $remoteData;
+        } else {
+            // ถ้าไม่มี Git ให้เช็คผ่าน HTTP จาก GitHub โดยตรง
+            $httpData = http_fetch_remote_version($baseDir);
+            if ($httpData && !empty($httpData['latest_version'])) {
+                $candidates[] = $httpData;
+            }
         }
     }
-    
-    // 4. Fallback: ดูจากโฟลเดอร์ล่าสุดใน eDHS Update/
+
+    // 3. Fallback: ตรวจดูโฟลเดอร์ล่าสุดใน eDHS Update/
     $patches = get_available_patch_folders($baseDir);
     if (!empty($patches)) {
-        $latest = end($patches);
-        return [
-            'latest_version' => $latest,
-            'patch_folder'   => $latest,
+        $latestFolder = end($patches);
+        $candidates[] = [
+            'latest_version' => $latestFolder,
+            'patch_folder'   => $latestFolder,
             'release_date'   => date('Y-m-d'),
-            'title'          => "Update Patch $latest"
+            'title'          => "Update Patch $latestFolder"
         ];
     }
 
-    return null;
+    if (empty($candidates)) {
+        return null;
+    }
+
+    // คัดเลือกเวอร์ชันที่ใหม่ที่สุด (Highest Version)
+    $best = $candidates[0];
+    foreach ($candidates as $cand) {
+        if (version_compare($cand['latest_version'], $best['latest_version'], '>')) {
+            $best = $cand;
+        }
+    }
+
+    return $best;
 }
 
 /**
@@ -554,6 +572,30 @@ function execute_system_update($targetVersion = null, $isCli = null, $force = fa
         ];
     }
 
+    // ป้องกันการอัปเดตซ้ำซ้อนหากระบบเป็นเวอร์ชันนั้นอยู่แล้ว (เว้นแต่ระบุ force=true)
+    if (!$force && !empty($currentVersion) && $currentVersion !== '00.00.00' && $targetVersion === $currentVersion) {
+        log_msg("ระบบเป็นเวอร์ชันล่าสุด ($currentVersion) อยู่แล้ว ไม่มีความจำเป็นต้องอัปเดตซ้ำ", 'info', $isCli);
+        return [
+            'success'         => true,
+            'already_latest'  => true,
+            'current_version' => $currentVersion,
+            'updated_version' => $currentVersion,
+            'updated_files'   => 0,
+            'message'         => "ระบบเป็นเวอร์ชันล่าสุด ($currentVersion) อยู่แล้ว"
+        ];
+    }
+
+    // ป้องกันการดาวน์เกรดระบบ (Downgrade Protection)
+    if (!$force && !empty($currentVersion) && $currentVersion !== '00.00.00' && version_compare($targetVersion, $currentVersion, '<')) {
+        log_msg("เวอร์ชันแพตช์ ($targetVersion) ต่ำกว่าเวอร์ชันที่ติดตั้งในปัจจุบัน ($currentVersion) ระบบปฏิเสธการดาวน์เกรด", 'warn', $isCli);
+        return [
+            'success'         => false,
+            'current_version' => $currentVersion,
+            'target_version'  => $targetVersion,
+            'message'         => "ไม่อนุญาตให้ดาวน์เกรดระบบจาก v$currentVersion สู่ v$targetVersion"
+        ];
+    }
+
     $patchDir = $baseDir . '/eDHS Update/' . $targetVersion;
     $hasGit = (find_git_binary() !== null);
     if ((!$hasGit && $force) || !is_dir($patchDir)) {
@@ -615,7 +657,16 @@ function execute_system_update($targetVersion = null, $isCli = null, $force = fa
 // =========================================================================
 // ENTRY POINT (เมื่อรันผ่าน CLI หรือเรียกตรง)
 // =========================================================================
-if ($isCli) {
+$isDirectCli = false;
+if ($isCli && !empty($_SERVER['SCRIPT_FILENAME'])) {
+    $scriptReal = realpath($_SERVER['SCRIPT_FILENAME']);
+    $fileReal = realpath(__FILE__);
+    if ($scriptReal && $fileReal && $scriptReal === $fileReal) {
+        $isDirectCli = true;
+    }
+}
+
+if ($isDirectCli) {
     $args = $_SERVER['argv'] ?? [];
     $action = $args[1] ?? '--cli';
 
@@ -626,7 +677,7 @@ if ($isCli) {
         echo json_encode([
             'current_version'  => $cur,
             'latest_version'   => $lat,
-            'update_available' => version_compare($lat, $cur, '>') || ($lat !== $cur && $lat !== '00.00.00'),
+            'update_available' => version_compare($lat, $cur, '>') || ($cur === '00.00.00' && $lat !== '00.00.00'),
             'meta'             => $meta
         ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
         exit(0);

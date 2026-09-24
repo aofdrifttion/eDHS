@@ -24,7 +24,7 @@ if ($action === 'check') {
 
     // เช็คว่ามีเวอร์ชันใหม่หรือไม่
     $updateAvailable = false;
-    if (!empty($latestVersion) && $latestVersion !== '00.00.00' && $latestVersion !== $currentVersion) {
+    if (!empty($latestVersion) && $latestVersion !== '00.00.00' && (version_compare($latestVersion, $currentVersion, '>') || ($currentVersion === '00.00.00' && $latestVersion !== $currentVersion))) {
         $updateAvailable = true;
     }
 
