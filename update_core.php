@@ -684,7 +684,7 @@ if ($isDirectCli) {
     }
 
     // ค่าเริ่มต้น: ดำเนินการอัปเดต
-    $target = isset($args[2]) ? $args[2] : null;
+    $target = isset($args[2]) ? $args[2] : (strpos($action, '--') !== 0 ? $action : null);
     $result = execute_system_update($target, true);
     exit($result['success'] ? 0 : 1);
 }
