@@ -213,13 +213,18 @@ function http_fetch_remote_version($baseDir, $force = false) {
         }
     }
 
-    $url = 'https://raw.githubusercontent.com/aofdrifttion/eDHS/master/version.json';
+    $url = 'https://raw.githubusercontent.com/aofdrifttion/eDHS/master/version.json?nocache=' . time();
     $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
     curl_setopt($ch, CURLOPT_USERAGENT, 'eDHS-Updater');
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 6);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Cache-Control: no-cache, no-store, must-revalidate',
+        'Pragma: no-cache',
+        'Expires: 0'
+    ]);
 
     $data = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -331,7 +336,7 @@ function download_patch_from_github($baseDir, $targetVersion = null) {
 /**
  * ดึงข้อมูลเวอร์ชันล่าสุดจาก Remote GitHub หรือ Local version.json
  */
-function get_latest_version_meta($baseDir, $checkRemote = true) {
+function get_latest_version_meta($baseDir, $checkRemote = true, $force = false) {
     $candidates = [];
 
     // 1. ตรวจสอบจาก version.json ในเครื่องก่อนเสมอ
@@ -349,12 +354,12 @@ function get_latest_version_meta($baseDir, $checkRemote = true) {
 
     // 2. ตรวจสอบจาก GitHub Remote (ถ้าเปิด checkRemote)
     if ($checkRemote) {
-        $remoteData = git_fetch_remote_meta($baseDir);
+        $remoteData = git_fetch_remote_meta($baseDir, $force);
         if ($remoteData && !empty($remoteData['latest_version'])) {
             $candidates[] = $remoteData;
         } else {
             // ถ้าไม่มี Git ให้เช็คผ่าน HTTP จาก GitHub โดยตรง
-            $httpData = http_fetch_remote_version($baseDir);
+            $httpData = http_fetch_remote_version($baseDir, $force);
             if ($httpData && !empty($httpData['latest_version'])) {
                 $candidates[] = $httpData;
             }
@@ -558,7 +563,7 @@ function execute_system_update($targetVersion = null, $isCli = null, $force = fa
     }
 
     $currentVersion = get_current_installed_version($baseDir);
-    $meta = get_latest_version_meta($baseDir);
+    $meta = get_latest_version_meta($baseDir, true, $force);
 
     if (empty($targetVersion)) {
         $targetVersion = $meta['patch_folder'] ?? $meta['latest_version'] ?? null;

@@ -18,8 +18,15 @@ $force = ($force_param === '1' || $force_param === 1 || $force_param === true ||
 
 if ($action === 'check') {
     $currentVersion = get_current_installed_version($baseDir);
+    // หากระบุ force=1 ให้ล้าง cache เดิมทิ้งทันทีเพื่อให้ดึงสดใหม่จาก GitHub
+    if ($force) {
+        $cacheFile = $baseDir . '/system/logs/remote_update_cache.json';
+        if (file_exists($cacheFile)) {
+            @unlink($cacheFile);
+        }
+    }
     // ตรวจสอบทั้ง Remote GitHub และในเครื่อง
-    $meta = get_latest_version_meta($baseDir, true);
+    $meta = get_latest_version_meta($baseDir, true, $force);
     $latestVersion = $meta['latest_version'] ?? $currentVersion;
 
     // เช็คว่ามีเวอร์ชันใหม่หรือไม่
@@ -80,13 +87,22 @@ if ($action === 'check') {
 
 if ($action === 'apply') {
     $targetVersion = $_POST['version'] ?? $_GET['version'] ?? null;
+    if (empty($targetVersion) || $targetVersion === 'undefined' || $targetVersion === 'null') {
+        $targetVersion = null;
+    }
 
     // 1. ดึงข้อมูลล่าสุดจาก GitHub ผ่าน Git ก่อน (ถ้ามี Git)
-    if (find_git_binary()) {
+    $hasGit = (find_git_binary() !== null);
+    if ($hasGit) {
         git_pull_latest($baseDir);
     }
 
-    // 2. ดำเนินการติดตั้งแพตช์ สำรองไฟล์ และอัปเดตระบบ (รันผ่าน Web API: $isCli = false)
+    // 2. ถ้าไม่มี Git หรือโฟลเดอร์ของเวอร์ชันเป้าหมายยังไม่มีในเครื่อง ให้ดาวน์โหลดผ่าน GitHub ZIP (Pure PHP)
+    if (!$hasGit || ($targetVersion && !is_dir($baseDir . '/eDHS Update/' . $targetVersion))) {
+        download_patch_from_github($baseDir, $targetVersion);
+    }
+
+    // 3. ดำเนินการติดตั้งแพตช์ สำรองไฟล์ และอัปเดตระบบ (รันผ่าน Web API: $isCli = false)
     $result = execute_system_update($targetVersion, false, $force);
 
     // ล้าง Cache การตรวจสอบอัปเดต

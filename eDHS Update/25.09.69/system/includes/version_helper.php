@@ -218,43 +218,63 @@ if (!function_exists('check_system_update_available')) {
     function check_system_update_available() {
         $currentVersion = get_system_version();
         $baseDir = dirname(__DIR__, 2);
-        
-        $versionJsonPath = $baseDir . '/version.json';
-        $latestMeta = null;
-        if (file_exists($versionJsonPath)) {
-            $latestMeta = json_decode(@file_get_contents($versionJsonPath), true);
+        $candidates = [];
+
+        // 1. ตรวจดู Cache ที่เคยดึงจาก Remote GitHub มาเก็บไว้ในเครื่อง
+        $cacheFile = $baseDir . '/system/logs/remote_update_cache.json';
+        if (file_exists($cacheFile)) {
+            $cacheJson = json_decode(@file_get_contents($cacheFile), true);
+            if (!empty($cacheJson['data']['latest_version'])) {
+                $candidates[] = $cacheJson['data'];
+            }
         }
-        
-        // Fallback: ตรวจดูโฟลเดอร์ล่าสุดใน eDHS Update/
-        if (!$latestMeta || empty($latestMeta['latest_version'])) {
-            $updateDir = $baseDir . '/eDHS Update';
-            if (is_dir($updateDir)) {
-                $patches = array_diff(scandir($updateDir), ['.', '..']);
-                natsort($patches);
-                if (!empty($patches)) {
-                    $latestFolder = end($patches);
-                    $latestMeta = [
-                        'latest_version' => $latestFolder,
-                        'patch_folder'   => $latestFolder,
-                        'title'          => "อัปเดตเวอร์ชัน $latestFolder",
-                        'release_date'   => date('Y-m-d')
-                    ];
-                }
+
+        // 2. ตรวจสอบจาก version.json ในเครื่อง
+        $versionJsonPath = $baseDir . '/version.json';
+        if (file_exists($versionJsonPath)) {
+            $vData = json_decode(@file_get_contents($versionJsonPath), true);
+            if (!empty($vData['latest_version'])) {
+                $candidates[] = $vData;
             }
         }
         
-        if (!$latestMeta || empty($latestMeta['latest_version'])) {
-            return ['available' => false];
+        // 3. Fallback: ตรวจดูโฟลเดอร์ล่าสุดใน eDHS Update/
+        $updateDir = $baseDir . '/eDHS Update';
+        if (is_dir($updateDir)) {
+            $patches = array_diff(scandir($updateDir), ['.', '..']);
+            natsort($patches);
+            if (!empty($patches)) {
+                $latestFolder = end($patches);
+                $candidates[] = [
+                    'latest_version' => $latestFolder,
+                    'patch_folder'   => $latestFolder,
+                    'title'          => "อัปเดตเวอร์ชัน $latestFolder",
+                    'release_date'   => date('Y-m-d')
+                ];
+            }
         }
         
-        $latestVersion = $latestMeta['latest_version'];
-        $hasUpdate = (version_compare($latestVersion, $currentVersion, '>') || ($currentVersion === '00.00.00' && $latestVersion !== '00.00.00'));
+        if (empty($candidates)) {
+            return ['available' => false, 'current_version' => $currentVersion];
+        }
+
+        // คัดเลือก Candidate ที่มีเวอร์ชันสูงสุด
+        $highestMeta = null;
+        foreach ($candidates as $cand) {
+            $cVer = $cand['latest_version'] ?? '00.00.00';
+            if ($highestMeta === null || version_compare($cVer, $highestMeta['latest_version'], '>')) {
+                $highestMeta = $cand;
+            }
+        }
+        
+        $latestVersion = $highestMeta['latest_version'] ?? $currentVersion;
+        $hasUpdate = (!empty($latestVersion) && $latestVersion !== '00.00.00' && (version_compare($latestVersion, $currentVersion, '>') || ($currentVersion === '00.00.00' && $latestVersion !== $currentVersion)));
         
         return [
             'available'       => $hasUpdate,
             'current_version' => $currentVersion,
             'latest_version'  => $latestVersion,
-            'meta'            => $latestMeta
+            'meta'            => $highestMeta
         ];
     }
 }
@@ -487,7 +507,7 @@ if (!function_exists('render_changelog_modal')) {
                     <span class="badge bg-white text-dark rounded-pill px-3 py-1.5 fw-semibold shadow-xs d-inline-flex align-items-center" style="font-size: 12px;">
                       <i class="bx bx-check-circle me-1 text-success font-size-16"></i>v<?= htmlspecialchars($version); ?> (เวอร์ชันล่าสุด)
                     </span>
-                    <button type="button" class="btn btn-outline-warning btn-sm rounded-pill px-2.5 py-1 text-warning shadow-xs d-inline-flex align-items-center" onclick="triggerSystemUpdate('<?= htmlspecialchars($version) ?>', true)" style="font-size: 11.5px; border-color: rgba(255,193,7,0.5);" title="ดึงโค้ดและติดตั้งแพตช์ซ้ำ">
+                    <button type="button" class="btn btn-outline-warning btn-sm rounded-pill px-2.5 py-1 text-warning shadow-xs d-inline-flex align-items-center" onclick="triggerSystemUpdate('', true)" style="font-size: 11.5px; border-color: rgba(255,193,7,0.5);" title="ดึงโค้ดและติดตั้งแพตช์ซ้ำ">
                       <i class="bx bx-refresh me-1 font-size-14"></i>รีอัปเดต
                     </button>
                   <?php endif; ?>
@@ -641,20 +661,133 @@ if (!function_exists('render_changelog_modal')) {
             } else if (typeof $ !== 'undefined') {
                 $('#changelogModal').modal('show');
             }
+
+            // ตรวจสอบเวอร์ชันล่าสุดจาก GitHub แบบเรียลไทม์ทันทีที่เปิดหน้าต่าง
+            fetch('api_update.php?action=check&force=1')
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                if (data && data.update_available) {
+                    // 1. อัปเดตส่วนหัวของ Modal ให้แสดงปุ่มอัปเดตเวอร์ชันใหม่ทันที
+                    var headerActions = document.querySelector('#changelogModal .modal-header .d-flex.align-items-center.gap-2');
+                    if (headerActions) {
+                        var updateBtnHtml = '<button type="button" class="btn btn-warning btn-sm rounded-pill px-3 py-1 fw-bold shadow-xs text-dark d-inline-flex align-items-center" onclick="triggerSystemUpdate(\'' + data.latest_version + '\')">' +
+                            '<i class="bx bx-refresh me-1 font-size-16"></i>อัปเดตเป็น v' + data.latest_version + ' ⚡' +
+                            '</button>';
+                        var existingBtn = headerActions.querySelector('.btn-warning');
+                        if (existingBtn) {
+                            existingBtn.outerHTML = updateBtnHtml;
+                        } else {
+                            var badge = headerActions.querySelector('.badge');
+                            if (badge) badge.remove();
+                            var reBtn = headerActions.querySelector('.btn-outline-warning');
+                            if (reBtn) reBtn.remove();
+                            var closeBtn = headerActions.querySelector('.btn-close');
+                            if (closeBtn) {
+                                closeBtn.insertAdjacentHTML('beforebegin', updateBtnHtml);
+                            } else {
+                                headerActions.insertAdjacentHTML('afterbegin', updateBtnHtml);
+                            }
+                        }
+                    }
+
+                    // 2. แทรกการ์ด Release ของเวอร์ชันใหม่เข้าด้านบนสุดของ Modal Body
+                    if (data.upcoming_release) {
+                        var cardId = 'card-release-' + data.latest_version;
+                        var existingCard = document.getElementById(cardId);
+                        var changelogContainer = document.querySelector('#changelogModal .changelog-container');
+                        if (!existingCard && changelogContainer) {
+                            var rel = data.upcoming_release;
+                            var changesHtml = '';
+                            if (rel.changes && rel.changes.length > 0) {
+                                rel.changes.forEach(function(ch) {
+                                    var tag = ch.tag || 'ปรับปรุง';
+                                    var desc = ch.description || '';
+                                    var icon = ch.icon || 'bx-check-circle';
+                                    var badgeColor = ch.color || 'info';
+                                    var colorMap = {
+                                        'success': 'background-color: #e8fadf; color: #28a745; border: 1px solid #c3e6cb;',
+                                        'danger':  'background-color: #ffeef0; color: #dc3545; border: 1px solid #f5c6cb;',
+                                        'warning': 'background-color: #fff8e6; color: #ff9800; border: 1px solid #ffeeba;',
+                                        'primary': 'background-color: #ebeefe; color: #696cff; border: 1px solid #d4dafd;',
+                                        'info':    'background-color: #e7f7ff; color: #007bff; border: 1px solid #b8daff;'
+                                    };
+                                    var bStyle = colorMap[badgeColor] || colorMap['info'];
+                                    changesHtml += '<div class="p-3 rounded-3" style="background-color: #f8fafc; border: 1px solid #e2e8f0;">' +
+                                        '<div class="d-flex align-items-center gap-2 mb-2 flex-wrap">' +
+                                          '<span class="badge rounded-pill px-2.5 py-1 d-inline-flex align-items-center fw-bold" style="' + bStyle + ' font-size: 12px;">' +
+                                            '<i class="bx ' + icon + ' me-1"></i>' + tag +
+                                          '</span>' +
+                                        '</div>' +
+                                        '<div class="text-secondary ps-1" style="font-size: 13.5px; line-height: 1.65; word-break: break-word;">' +
+                                          desc +
+                                        '</div>' +
+                                      '</div>';
+                                });
+                            } else {
+                                changesHtml = '<p class="text-muted mb-0 py-2" style="font-size: 13px;">ไม่มีรายละเอียดการเปลี่ยนแปลงย่อย</p>';
+                            }
+
+                            var newCardHtml = '<div class="card mb-4 border-0 shadow-sm" id="' + cardId + '" style="border-radius: 14px; overflow: hidden; border-left: 5px solid #ff9800 !important; background: #fffdf5;">' +
+                                '<div class="card-header bg-white pt-3 pb-3 px-4 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2" style="border-color: #ffeeba !important;">' +
+                                  '<div class="d-flex align-items-center gap-2 flex-wrap">' +
+                                    '<span class="badge bg-warning text-dark rounded-pill px-3 py-1.5 fw-bold shadow-xs" style="font-size: 13.5px;">' +
+                                      '<i class="bx bx-bell-ring me-1"></i>v' + rel.version + ' (เวอร์ชั่นใหม่ที่จะปรับปรุง)' +
+                                    '</span>' +
+                                    '<span class="badge rounded-pill px-2.5 py-1 fw-bold shadow-xs" style="background-color: #ffeeba; color: #856404; font-size: 11.5px;">' +
+                                      '<i class="bx bx-up-arrow-circle me-1"></i>พร้อมติดตั้ง' +
+                                    '</span>' +
+                                  '</div>' +
+                                  '<div class="d-flex align-items-center gap-2">' +
+                                    '<span class="text-muted" style="font-size: 13px;"><i class="bx bx-calendar me-1 text-primary"></i>' + (rel.date || '') + '</span>' +
+                                    '<button type="button" class="btn btn-warning btn-sm rounded-pill px-3 py-1 fw-bold text-dark d-inline-flex align-items-center shadow-xs" onclick="triggerSystemUpdate(\'' + rel.version + '\')">' +
+                                      '<i class="bx bx-refresh me-1 font-size-16"></i>อัปเดตระบบเดี๋ยวนี้ ⚡' +
+                                    '</button>' +
+                                  '</div>' +
+                                '</div>' +
+                                '<div class="px-4 pt-3 pb-2 bg-white">' +
+                                  '<h6 class="fw-bold text-dark mb-0" style="font-size: 14.5px; line-height: 1.6;">' + (rel.title || '') + '</h6>' +
+                                '</div>' +
+                                '<div class="card-body px-4 py-3" style="background-color: #ffffff;">' +
+                                  '<div class="d-flex align-items-center mb-3">' +
+                                    '<span class="fw-bold text-dark" style="font-size: 13.5px;"><i class="bx bx-list-check me-1 text-warning font-size-18"></i>รายการที่จะปรับปรุงในเวอร์ชั่นนี้:</span>' +
+                                  '</div>' +
+                                  '<div class="d-flex flex-column gap-3">' + changesHtml + '</div>' +
+                                '</div>' +
+                              '</div>';
+
+                            changelogContainer.insertAdjacentHTML('afterbegin', newCardHtml);
+                        }
+                    }
+
+                    // 3. เพิ่มปุ่มอัปเดตใน Modal Footer
+                    var modalFooterActions = document.querySelector('#changelogModal .modal-footer .d-flex.gap-2');
+                    if (modalFooterActions && !modalFooterActions.querySelector('.btn-warning')) {
+                        var footerBtn = document.createElement('button');
+                        footerBtn.type = 'button';
+                        footerBtn.className = 'btn btn-warning text-dark px-4 py-2 rounded-pill fw-bold shadow-xs d-inline-flex align-items-center';
+                        footerBtn.innerHTML = '<i class="bx bx-refresh me-1.5 font-size-18"></i>อัปเดตระบบเดี๋ยวนี้ ⚡';
+                        footerBtn.onclick = function() { triggerSystemUpdate(data.latest_version); };
+                        modalFooterActions.insertBefore(footerBtn, modalFooterActions.firstChild);
+                    }
+                }
+            })
+            .catch(function(err) {
+                console.log('Changelog modal check error:', err);
+            });
         }
 
         function triggerSystemUpdate(version, force) {
             var targetVer = version || '';
             var isForce = (force === true);
             var confirmMsg = isForce 
-                ? 'คุณต้องการรีอัปเดต (ดึงโค้ดและติดตั้งแพตช์ซ้ำ) เวอร์ชัน ' + (targetVer || 'ปัจจุบัน') + ' หรือไม่?' 
+                ? 'คุณต้องการรีอัปเดต (ดึงโค้ดเวอร์ชันล่าสุดจาก GitHub และติดตั้งแพตช์ซ้ำ) หรือไม่?' 
                 : (targetVer ? 'คุณต้องการอัปเดตระบบเป็นเวอร์ชัน ' + targetVer + ' หรือไม่?' : 'คุณต้องการอัปเดตระบบเป็นเวอร์ชันล่าสุดหรือไม่?');
             
             var runUpdate = function() {
                 if (typeof Swal !== 'undefined') {
                     Swal.fire({
                         title: isForce ? 'กำลังดำเนินการรีอัปเดตระบบ...' : 'กำลังดำเนินการอัปเดตระบบ...',
-                        html: '<div class="text-center py-2"><div class="spinner-border text-primary mb-3" role="status"></div><p class="text-muted mb-0">ระบบกำลังสำรองข้อมูลและติดตั้งไฟล์แพตช์ กรุณารอสักครู่...</p></div>',
+                        html: '<div class="text-center py-2"><div class="spinner-border text-primary mb-3" role="status"></div><p class="text-muted mb-0">ระบบกำลังดึงข้อมูลล่าสุดจาก GitHub, สำรองไฟล์ และติดตั้งแพตช์ กรุณารอสักครู่...</p></div>',
                         allowOutsideClick: false,
                         allowEscapeKey: false,
                         showConfirmButton: false
@@ -735,6 +868,28 @@ if (!function_exists('render_changelog_modal')) {
                 }
             }
         }
+
+        // Global background check on all pages
+        document.addEventListener('DOMContentLoaded', function() {
+            fetch('api_update.php?action=check')
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                if (data && data.update_available) {
+                    // อัปเดตปุ่ม Version Badge ที่มุมหน้าจอให้แสดงสถานะ New Update ทันที
+                    var badges = document.querySelectorAll('button[onclick="openChangelogModal()"]');
+                    badges.forEach(function(badgeBtn) {
+                        if (!badgeBtn.querySelector('.bg-warning')) {
+                            var whatsNewBadge = badgeBtn.querySelector('.badge');
+                            if (whatsNewBadge) whatsNewBadge.remove();
+                            badgeBtn.insertAdjacentHTML('beforeend', '<span class="badge bg-warning text-dark rounded-pill ms-2 px-2 fw-bold" style="font-size: 10px; animation: pulseIcon 1.5s infinite;"><i class="bx bx-up-arrow-circle me-1"></i>v' + data.latest_version + ' พร้อมอัปเดต</span>');
+                            badgeBtn.classList.remove('btn-outline-primary');
+                            badgeBtn.classList.add('btn-primary');
+                        }
+                    });
+                }
+            })
+            .catch(function() {});
+        });
         </script>
         <?php
         return ob_get_clean();
