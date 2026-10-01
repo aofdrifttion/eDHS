@@ -3,6 +3,43 @@
     "last_updated": "2026-09-25",
     "releases": [
         {
+            "version": "01.10.69",
+            "date": "2026-10-01",
+            "title": "พัฒนาระบบคัดกรองเลือกลูกหนี้รายคนก่อนนำเข้าตรงจาก HOSxP, เพิ่มคอลัมน์สถานพยาบาลหลัก (hosmain), แก้ไขระบบค้นหาลูกหนี้ OPD\/IPD ครบทุกมิติ, แก้ไข Badge ประเภทผู้ป่วย และยกระดับระบบเปรียบเทียบเวอร์ชันรองรับการเปลี่ยนผ่านงวดเดือน (v01.10.69)",
+            "type": "feature",
+            "badge": "bg-primary",
+            "changes": [
+                {
+                    "category": "feature",
+                    "tag": "ระบบคัดกรองเลือกลูกหนี้รายคน (Selective Ingestion) และคอลัมน์ hosmain",
+                    "color": "primary",
+                    "icon": "bx-user-check",
+                    "description": "เพิ่มระบบ Checkbox รายคนในหน้าต่างตรวจสอบรายชื่อผู้ป่วยก่อนนำเข้าลูกหนี้ตรงจาก HOSxP พร้อมปุ่มด่วน 'เลือกทั้งหมด' และ 'ยกเว้นทั้งหมด' รองรับการไม่นำคนไข้บางรายเข้าสู่ระบบ eDHS โดยระบบจะคำนวณหักลบจำนวนเคสและยอดเงินลูกหนี้รวมแบบ Real-time พร้อมแสดง Badge 'ยกเว้น N ราย' ที่แถวสิทธินั้น และเพิ่มคอลัมน์ hosmain (สถานพยาบาลหลัก) ดึงรหัสและชื่อ รพ. จาก HOSxP แสดงผลและค้นหาด่วนได้ทันที"
+                },
+                {
+                    "category": "fix",
+                    "tag": "แก้ไข Bug คอลัมน์ i.dchtime ใน IPD และปรับปรุงระบบค้นหาข้อมูลลูกหนี้ครบทุกมิติ",
+                    "color": "danger",
+                    "icon": "bx-search-alt",
+                    "description": "แก้ไขข้อผิดพลาด Unknown column 'i.dchtime' ในตารางลูกหนี้ผู้ป่วยใน (imr_tb_debtor_rights_ipd) ซึ่งทำให้การค้นหา IPD แสดง 0 รายการ ปรับคำสั่ง SQL ให้ดึงวันจำหน่ายหรือวันนอนอย่างถูกต้อง พร้อมพัฒนาระบบ Balanced Dual-Quota Fetching จัดสรรโควต้าเท่าๆ กันให้ทั้ง OPD และ IPD และระบบ True Metric Calculation คำนวณยอดเคสรวม ยอดปลอดภัย ยอดติดล็อค และยอดเงินรวมจากฐานข้อมูลตรงตาม Dropdown 100%"
+                },
+                {
+                    "category": "fix",
+                    "tag": "แก้ไขการแสดง Badge ประเภทผู้ป่วย (OPD \/ IPD) และความเข้ากันได้ของการลบรายบุคคล",
+                    "color": "warning",
+                    "icon": "bx-badge-check",
+                    "description": "แก้ไขปัญหา Case Sensitivity ใน JavaScript ที่ทำให้เคสผู้ป่วยนอก (OPD) แสดง Badge สีเขียวเป็น IPD ทั้งหมด ให้แสดง Badge สีน้ำเงิน OPD และสีเขียว IPD ตรงตามประเภทจริง 100% พร้อมปรับปรุง API delete_selected_patients ให้รองรับทั้งพารามิเตอร์ keys และ items อย่างสมบูรณ์แบบ ภายใต้มาตรฐาน Financial Safety Lock 100%"
+                },
+                {
+                    "category": "improve",
+                    "tag": "ยกระดับระบบเปรียบเทียบเวอร์ชัน (Month Rollover Engine)",
+                    "color": "success",
+                    "icon": "bx-git-repo-forked",
+                    "description": "พัฒนาระบบ compare_edhs_versions() และ normalize_edhs_version() ใน update_core.php และ version_helper.php ให้แปลงรูปแบบเวอร์ชัน วว.ดด.ปป (DD.MM.YY) เป็นลำดับกาลเวลาที่ถูกต้องตามหลักสากล แก้ไขปัญหาข้อจำกัดของ version_compare เดิมที่ทำให้เวอร์ชันข้ามเดือน (เช่น 01.10.69 หลัง 25.09.69) ไม่ถูกตรวจจับเป็นเวอร์ชันใหม่"
+                }
+            ]
+        },
+        {
             "version": "25.09.69",
             "date": "2026-09-25",
             "title": "ปรับปรุงระบบทะเบียนคุมอายุลูกหนี้และระบบ Drill-Down รายละเอียดลูกหนี้รายบุคคล รองรับการตัดโอน CR\/SSS และตรวจสอบใบเสร็จหลายแหล่ง Multi-Source Receipt Resolution ยันยอดตรงตาม Column 12 100% (v25.09.69)",

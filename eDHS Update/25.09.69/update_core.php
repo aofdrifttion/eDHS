@@ -72,6 +72,32 @@ function get_current_installed_version($baseDir) {
     return '00.00.00';
 }
 
+if (!function_exists('normalize_edhs_version')) {
+    function normalize_edhs_version($ver) {
+        $ver = trim((string)$ver);
+        if (empty($ver) || $ver === '00.00.00') return '00.00.00.0';
+        $p = explode('.', $ver);
+        if (count($p) === 3) {
+            return sprintf('%02d.%02d.%02d.0', intval($p[2]), intval($p[1]), intval($p[0]));
+        }
+        if (count($p) === 4) {
+            return sprintf('%02d.%02d.%02d.%d', intval($p[3]), intval($p[2]), intval($p[0]), intval($p[1]));
+        }
+        return $ver;
+    }
+}
+
+if (!function_exists('compare_edhs_versions')) {
+    function compare_edhs_versions($v1, $v2, $operator = null) {
+        $norm1 = normalize_edhs_version($v1);
+        $norm2 = normalize_edhs_version($v2);
+        if ($operator === null) {
+            return version_compare($norm1, $norm2);
+        }
+        return version_compare($norm1, $norm2, $operator);
+    }
+}
+
 /**
  * สแกนหาแพตช์ที่มีในโฟลเดอร์ eDHS Update/
  */
@@ -91,8 +117,10 @@ function get_available_patch_folders($baseDir) {
         }
     }
 
-    // เรียงลำดับเวอร์ชัน (เวอร์ชันล่าสุดอยู่ท้ายสุด)
-    natsort($patches);
+    // เรียงลำดับเวอร์ชันตามวัน-เดือน-ปี พ.ศ. (เวอร์ชันล่าสุดอยู่ท้ายสุด)
+    usort($patches, function($a, $b) {
+        return compare_edhs_versions($a, $b);
+    });
     return array_values($patches);
 }
 
@@ -385,7 +413,7 @@ function get_latest_version_meta($baseDir, $checkRemote = true, $force = false) 
     // คัดเลือกเวอร์ชันที่ใหม่ที่สุด (Highest Version)
     $best = $candidates[0];
     foreach ($candidates as $cand) {
-        if (version_compare($cand['latest_version'], $best['latest_version'], '>')) {
+        if (compare_edhs_versions($cand['latest_version'], $best['latest_version'], '>')) {
             $best = $cand;
         }
     }
@@ -591,7 +619,7 @@ function execute_system_update($targetVersion = null, $isCli = null, $force = fa
     }
 
     // ป้องกันการดาวน์เกรดระบบ (Downgrade Protection)
-    if (!$force && !empty($currentVersion) && $currentVersion !== '00.00.00' && version_compare($targetVersion, $currentVersion, '<')) {
+    if (!$force && !empty($currentVersion) && $currentVersion !== '00.00.00' && compare_edhs_versions($targetVersion, $currentVersion, '<')) {
         log_msg("เวอร์ชันแพตช์ ($targetVersion) ต่ำกว่าเวอร์ชันที่ติดตั้งในปัจจุบัน ($currentVersion) ระบบปฏิเสธการดาวน์เกรด", 'warn', $isCli);
         return [
             'success'         => false,
@@ -682,7 +710,7 @@ if ($isDirectCli) {
         echo json_encode([
             'current_version'  => $cur,
             'latest_version'   => $lat,
-            'update_available' => version_compare($lat, $cur, '>') || ($cur === '00.00.00' && $lat !== '00.00.00'),
+            'update_available' => compare_edhs_versions($lat, $cur, '>') || ($cur === '00.00.00' && $lat !== '00.00.00'),
             'meta'             => $meta
         ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
         exit(0);

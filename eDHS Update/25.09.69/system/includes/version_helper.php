@@ -211,6 +211,32 @@ if (!function_exists('get_changelog_category_meta')) {
     }
 }
 
+if (!function_exists('normalize_edhs_version')) {
+    function normalize_edhs_version($ver) {
+        $ver = trim((string)$ver);
+        if (empty($ver) || $ver === '00.00.00') return '00.00.00.0';
+        $p = explode('.', $ver);
+        if (count($p) === 3) {
+            return sprintf('%02d.%02d.%02d.0', intval($p[2]), intval($p[1]), intval($p[0]));
+        }
+        if (count($p) === 4) {
+            return sprintf('%02d.%02d.%02d.%d', intval($p[3]), intval($p[2]), intval($p[0]), intval($p[1]));
+        }
+        return $ver;
+    }
+}
+
+if (!function_exists('compare_edhs_versions')) {
+    function compare_edhs_versions($v1, $v2, $operator = null) {
+        $norm1 = normalize_edhs_version($v1);
+        $norm2 = normalize_edhs_version($v2);
+        if ($operator === null) {
+            return version_compare($norm1, $norm2);
+        }
+        return version_compare($norm1, $norm2, $operator);
+    }
+}
+
 /**
  * ตรวจสอบว่ามีเวอร์ชันใหม่อัปเดตหรือไม่
  */
@@ -242,8 +268,11 @@ if (!function_exists('check_system_update_available')) {
         $updateDir = $baseDir . '/eDHS Update';
         if (is_dir($updateDir)) {
             $patches = array_diff(scandir($updateDir), ['.', '..']);
-            natsort($patches);
             if (!empty($patches)) {
+                $patches = array_values($patches);
+                usort($patches, function($a, $b) {
+                    return compare_edhs_versions($a, $b);
+                });
                 $latestFolder = end($patches);
                 $candidates[] = [
                     'latest_version' => $latestFolder,
@@ -262,13 +291,13 @@ if (!function_exists('check_system_update_available')) {
         $highestMeta = null;
         foreach ($candidates as $cand) {
             $cVer = $cand['latest_version'] ?? '00.00.00';
-            if ($highestMeta === null || version_compare($cVer, $highestMeta['latest_version'], '>')) {
+            if ($highestMeta === null || compare_edhs_versions($cVer, $highestMeta['latest_version'], '>')) {
                 $highestMeta = $cand;
             }
         }
         
         $latestVersion = $highestMeta['latest_version'] ?? $currentVersion;
-        $hasUpdate = (!empty($latestVersion) && $latestVersion !== '00.00.00' && (version_compare($latestVersion, $currentVersion, '>') || ($currentVersion === '00.00.00' && $latestVersion !== $currentVersion)));
+        $hasUpdate = (!empty($latestVersion) && $latestVersion !== '00.00.00' && (compare_edhs_versions($latestVersion, $currentVersion, '>') || ($currentVersion === '00.00.00' && $latestVersion !== $currentVersion)));
         
         return [
             'available'       => $hasUpdate,
