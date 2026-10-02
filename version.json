@@ -10,7 +10,8 @@
     "เพิ่มคอลัมน์ hosmain (สถานพยาบาลหลัก) ดึงรหัสและชื่อ รพ. จาก HOSxP แสดงผลและรองรับการค้นหาด่วน",
     "แก้ไข Bug คอลัมน์ i.dchtime ในลูกหนี้ผู้ป่วยใน (IPD) ช่วยให้การค้นหาลูกหนี้ทุกมิติ (OPD / IPD / รวม / แยกผัง / ช่วงเวลา) แสดงผลถูกต้อง 100%",
     "แก้ไขปัญหา Case Sensitivity แสดง Badge ประเภทผู้ป่วย (OPD / IPD) ตรงตามประเภทจริง และรองรับการลบรายคนอย่างปลอดภัย (Financial Safety Lock)",
-    "ยกระดับระบบเปรียบเทียบเวอร์ชัน compare_edhs_versions() รองรับการเปลี่ยนผ่านงวดเดือน (Month Rollover) ข้ามเดือนกันยายนสู่ตุลาคม 2569 ได้อย่างราบรื่น"
+    "ยกระดับระบบเปรียบเทียบเวอร์ชัน compare_edhs_versions() รองรับการเปลี่ยนผ่านงวดเดือน (Month Rollover) ข้ามเดือนกันยายนสู่ตุลาคม 2569 ได้อย่างราบรื่น",
+    "แก้ไขปุ่มยืนยันดึงข้อมูลเข้าสู่ระบบใน Modal ปิดแท็ก HTML เกิน ทำให้คลิกไม่ทำงาน พร้อมเสริม Safe Notifier และ z-index 100%"
   ],
   "changes": [
     {
@@ -40,6 +41,13 @@
       "color": "success",
       "icon": "bx-git-repo-forked",
       "description": "พัฒนาระบบ compare_edhs_versions() และ normalize_edhs_version() ใน update_core.php และ version_helper.php ให้แปลงรูปแบบเวอร์ชัน วว.ดด.ปป (DD.MM.YY) เป็นลำดับกาลเวลาที่ถูกต้องตามหลักสากล แก้ไขปัญหาข้อจำกัดของ version_compare เดิมที่ทำให้เวอร์ชันข้ามเดือน (เช่น 01.10.69 หลัง 25.09.69) ไม่ถูกตรวจจับเป็นเวอร์ชันใหม่"
+    },
+    {
+      "category": "fix",
+      "tag": "แก้ไขปุ่มยืนยันดึงข้อมูลเข้าสู่ระบบกดไม่ทำงาน (HTML Div Nesting & Pointer-Events Trap)",
+      "color": "danger",
+      "icon": "bx-check-double",
+      "description": "แก้ไขโครงสร้างแท็ก HTML ใน modal_direct_debtor_pull.php ที่มีการปิด </div> เกินก่อน .modal-footer ทำให้ส่วน Footer หลุดออกไปอยู่นอก .modal-content ส่งผลให้โดน pointer-events: none ของ Bootstrap modal-dialog ครอบทับจนคลิกปุ่ม 'ยืนยันดึงข้อมูลเข้าสู่ระบบ' และ 'ปิดหน้าต่าง' ไม่ทำงาน พร้อมปรับปรุง hosSafeNotify() รองรับ Native Fallback ป้องกันการค้างจาก CDN SweetAlert2 และเสริม z-index แสดงผลทับทุกเลเยอร์อย่างถูกต้อง 100%"
     }
   ]
 }

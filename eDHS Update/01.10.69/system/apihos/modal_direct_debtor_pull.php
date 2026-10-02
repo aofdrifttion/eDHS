@@ -75,6 +75,20 @@ if (isset($conn) && $conn) {
   flex-shrink: 0 !important;
   border-radius: 0 !important;
   padding: 0.75rem 1.5rem !important;
+  pointer-events: auto !important;
+  position: relative !important;
+  z-index: 1055 !important;
+}
+#modalDirectDebtorPull .modal-footer button {
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
+.swal2-container, body .swal2-container {
+  z-index: 999999 !important;
+  pointer-events: auto !important;
+}
+.swal2-popup {
+  z-index: 1000000 !important;
 }
 /* Z-Index และความสวยงามของ Thai Bootstrap Datepicker */
 .datepicker.datepicker-dropdown {
@@ -1205,8 +1219,6 @@ if (isset($conn) && $conn) {
 
         </div>
 
-      </div>
-
       <!-- Modal Footer -->
       <div class="modal-footer bg-white d-flex justify-content-between">
         <div>
@@ -2334,152 +2346,194 @@ function filterHosTable() {
 }
 
 // ====================================================================================
+// ตัวช่วยแสดงแจ้งเตือน / ยืนยัน รองรับทั้ง SweetAlert2 และ Native Fallback (ปลอดภัย 100%)
+// ====================================================================================
+async function hosSafeNotify(options) {
+  if (typeof Swal !== 'undefined' && Swal.fire) {
+    try {
+      return await Swal.fire(options);
+    } catch (e) {
+      console.warn('Swal.fire failed, falling back to native:', e);
+    }
+  }
+  const isConfirm = Boolean(options.showCancelButton || options.icon === 'question');
+  const rawTitle = options.title ? `${options.title}\n\n` : '';
+  const bodyText = options.text || (options.html ? options.html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() : '');
+  const fullText = (rawTitle + bodyText).trim();
+  if (isConfirm) {
+    const ok = window.confirm(fullText);
+    return { isConfirmed: ok, isDenied: !ok, isDismissed: !ok };
+  } else {
+    window.alert(fullText);
+    return { isConfirmed: true };
+  }
+}
+
+// ====================================================================================
 // เริ่มกระบวนการดึงข้อมูลแบบ Batch / Chunk Loop
 // ====================================================================================
 async function startHosBatchPull() {
-  if (isPullingInProgress || !hosPreviewData) return;
-
-  const checkedBoxes = document.querySelectorAll('.hos-right-chk:checked');
-  if (checkedBoxes.length === 0) {
-    Swal.fire({ icon: 'warning', title: 'ยังไม่ได้เลือกสิทธิ', text: 'กรุณาเลือกสิทธิที่ต้องการนำเข้าอย่างน้อย 1 สิทธิ' });
+  if (isPullingInProgress) {
+    await hosSafeNotify({
+      icon: 'info',
+      title: 'กำลังนำเข้าข้อมูล',
+      text: 'ระบบกำลังดำเนินการดึงข้อมูลอยู่แล้ว กรุณารอสักครู่...'
+    });
     return;
   }
 
-  // แยกสิทธิที่เลือกระหว่าง OPD และ IPD
-  const selectedOpdRights = [];
-  const selectedIpdRights = [];
-  let totalCasesToPull = 0;
-
-  checkedBoxes.forEach(c => {
-    const val = c.value;
-    totalCasesToPull += parseInt(c.dataset.cases || 0);
-    if (val.startsWith('OPD:')) {
-      selectedOpdRights.push(val.replace('OPD:', ''));
-    } else if (val.startsWith('IPD:')) {
-      selectedIpdRights.push(val.replace('IPD:', ''));
-    }
-  });
-
-  // ตรวจสอบความปลอดภัยทางการเงิน: ห้ามมีสิทธิที่ถูกล็อกหลุดเข้ามา
-  for (const c of checkedBoxes) {
-    const val = c.value;
-    const [ptType, ptCode] = val.split(':');
-    const row = hosPreviewData.rights.find(r => r.type === ptType && r.pttype === ptCode);
-    if (row && row.is_locked) {
-      Swal.fire({
-        icon: 'error',
-        title: 'พบสิทธิที่ถูกล็อกทางการเงิน',
-        text: `สิทธิ [${ptType}] ${row.pttype} - ${row.pttypename} ถูกล็อก: ${row.lock_reason} (ห้ามนำเข้าซ้ำเด็ดขาด)`
-      });
-      return;
-    }
-  }
-
-  // ตรวจสอบว่ามีสิทธิที่ยังไม่ได้เลือกผังบัญชีหรือไม่
-  const unmappedWithoutSelection = [];
-  checkedBoxes.forEach(c => {
-    const val = c.value;
-    const [ptType, ptCode] = val.split(':');
-    const row = hosPreviewData.rights.find(r => r.type === ptType && r.pttype === ptCode);
-    if (row && (row.is_unmapped || !row.accountcode || row.accountcode === '-')) {
-      if (!hosCustomMappings[val] && !hosCustomMappings[ptCode]) {
-        unmappedWithoutSelection.push(`[${ptType}] ${row.pttype} - ${row.pttypename}`);
-      }
-    }
-  });
-
-  if (unmappedWithoutSelection.length > 0) {
-    const warnHtml = `
-      <div class="text-start">
-        <p class="text-warning fw-bold mb-2">⚠️ มี ${unmappedWithoutSelection.length} สิทธิที่ยังไม่ได้เลือกผังบัญชี:</p>
-        <ul class="small text-muted mb-3" style="max-height: 150px; overflow-y: auto;">
-          ${unmappedWithoutSelection.map(s => `<li>${s}</li>`).join('')}
-        </ul>
-        <p class="small mb-0">ท่านต้องการกลับไปเลือกผังบัญชีก่อน หรือยืนยันดึงต่อโดยไม่ระบุผังบัญชี?</p>
-      </div>
-    `;
-    const warnRes = await Swal.fire({
+  if (!hosPreviewData) {
+    await hosSafeNotify({
       icon: 'warning',
-      title: 'พบสิทธิที่ยังไม่ได้ผูกผังบัญชี',
-      html: warnHtml,
-      showCancelButton: true,
-      confirmButtonColor: '#f59e0b',
-      cancelButtonColor: '#64748b',
-      confirmButtonText: 'ดำเนินการต่อโดยไม่ระบุผัง',
-      cancelButtonText: 'กลับไปเลือกผังบัญชี'
+      title: 'ยังไม่ได้ตรวจสอบยอด',
+      text: 'กรุณากดปุ่ม "ตรวจสอบยอด" เพื่อโหลดรายการสิทธิก่อนทำการนำเข้าข้อมูล'
     });
-    if (!warnRes.isConfirmed) {
-      return;
-    }
+    return;
   }
-
-  // คำนวณยอดเคสที่จะดึงจริง (หักรายการที่ผู้ใช้ยกเว้นออก)
-  let actualCasesToPull = totalCasesToPull;
-  let totalExcludedAll = 0;
-  selectedOpdRights.forEach(pcode => {
-    const rk = `OPD:${pcode}`;
-    if (hosExcludedPatients[rk]) {
-      const exC = Object.keys(hosExcludedPatients[rk]).length;
-      totalExcludedAll += exC;
-      actualCasesToPull -= exC;
-    }
-  });
-  selectedIpdRights.forEach(pcode => {
-    const rk = `IPD:${pcode}`;
-    if (hosExcludedPatients[rk]) {
-      const exC = Object.keys(hosExcludedPatients[rk]).length;
-      totalExcludedAll += exC;
-      actualCasesToPull -= exC;
-    }
-  });
-
-  const confirmRes = await Swal.fire({
-    title: 'ยืนยันการดึงข้อมูลจาก HOSxP?',
-    html: `
-      <div class="text-start">
-        <p class="mb-2">ระบบจะดึงข้อมูลผู้ป่วยรายตัวและบันทึกลงฐานข้อมูล eDHS:</p>
-        <ul class="small text-muted mb-3">
-          <li><strong>จำนวนสิทธิที่เลือก:</strong> ${checkedBoxes.length} สิทธิ</li>
-          <li><strong>OPD:</strong> ${selectedOpdRights.length} สิทธิ | <strong>IPD:</strong> ${selectedIpdRights.length} สิทธิ</li>
-          ${totalExcludedAll > 0 ? `<li class="text-warning"><strong>รายการที่ยกเว้นไม่นำเข้า:</strong> ${totalExcludedAll.toLocaleString()} ราย</li>` : ''}
-          <li><strong>เคสสุทธิที่จะนำเข้า:</strong> ~${Math.max(0, actualCasesToPull).toLocaleString()} รายการ</li>
-        </ul>
-      </div>
-    `,
-    icon: 'question',
-    showCancelButton: true,
-    confirmButtonColor: '#10b981',
-    cancelButtonColor: '#64748b',
-    confirmButtonText: '<i class="bx bx-cloud-download"></i> ยืนยันเริ่มดึงข้อมูล',
-    cancelButtonText: 'ยกเลิก'
-  });
-
-  if (!confirmRes.isConfirmed) return;
-
-  // เตรียม UI แสดงความคืบหน้า
-  isPullingInProgress = true;
-  document.getElementById('btnStartPull').disabled = true;
-  document.getElementById('btnPreviewHos').disabled = true;
-  
-  const progressBox = document.getElementById('hosProgressBox');
-  const progressBar = document.getElementById('hosProgressBarInner');
-  const statusText = document.getElementById('hosProgressStatusText');
-  const percentText = document.getElementById('hosProgressPercentText');
-  const detailText = document.getElementById('hosProgressDetailText');
-  const cntInserted = document.getElementById('cntHosInserted');
-  const cntUpdated = document.getElementById('cntHosUpdated');
-  const cntSkipped = document.getElementById('cntHosSkipped');
-
-  progressBox.style.display = 'block';
-  progressBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-  let totalInserted = 0;
-  let totalUpdated = 0;
-  let totalSkipped = 0;
-  let grandProcessed = 0;
-  const batchSize = 500;
 
   try {
+    const checkedBoxes = document.querySelectorAll('.hos-right-chk:checked');
+    if (checkedBoxes.length === 0) {
+      await hosSafeNotify({ icon: 'warning', title: 'ยังไม่ได้เลือกสิทธิ', text: 'กรุณาเลือกสิทธิที่ต้องการนำเข้าอย่างน้อย 1 สิทธิ' });
+      return;
+    }
+
+    // แยกสิทธิที่เลือกระหว่าง OPD และ IPD
+    const selectedOpdRights = [];
+    const selectedIpdRights = [];
+    let totalCasesToPull = 0;
+
+    checkedBoxes.forEach(c => {
+      const val = c.value;
+      totalCasesToPull += parseInt(c.dataset.cases || 0);
+      if (val.startsWith('OPD:')) {
+        selectedOpdRights.push(val.replace('OPD:', ''));
+      } else if (val.startsWith('IPD:')) {
+        selectedIpdRights.push(val.replace('IPD:', ''));
+      }
+    });
+
+    // ตรวจสอบความปลอดภัยทางการเงิน: ห้ามมีสิทธิที่ถูกล็อกหลุดเข้ามา
+    for (const c of checkedBoxes) {
+      const val = c.value;
+      const [ptType, ptCode] = val.split(':');
+      const row = hosPreviewData.rights.find(r => r.type === ptType && r.pttype === ptCode);
+      if (row && row.is_locked) {
+        await hosSafeNotify({
+          icon: 'error',
+          title: 'พบสิทธิที่ถูกล็อกทางการเงิน',
+          text: `สิทธิ [${ptType}] ${row.pttype} - ${row.pttypename} ถูกล็อก: ${row.lock_reason} (ห้ามนำเข้าซ้ำเด็ดขาด)`
+        });
+        return;
+      }
+    }
+
+    // ตรวจสอบว่ามีสิทธิที่ยังไม่ได้เลือกผังบัญชีหรือไม่
+    const unmappedWithoutSelection = [];
+    checkedBoxes.forEach(c => {
+      const val = c.value;
+      const [ptType, ptCode] = val.split(':');
+      const row = hosPreviewData.rights.find(r => r.type === ptType && r.pttype === ptCode);
+      if (row && (row.is_unmapped || !row.accountcode || row.accountcode === '-')) {
+        if (!hosCustomMappings[val] && !hosCustomMappings[ptCode]) {
+          unmappedWithoutSelection.push(`[${ptType}] ${row.pttype} - ${row.pttypename}`);
+        }
+      }
+    });
+
+    if (unmappedWithoutSelection.length > 0) {
+      const warnHtml = `
+        <div class="text-start">
+          <p class="text-warning fw-bold mb-2">⚠️ มี ${unmappedWithoutSelection.length} สิทธิที่ยังไม่ได้เลือกผังบัญชี:</p>
+          <ul class="small text-muted mb-3" style="max-height: 150px; overflow-y: auto;">
+            ${unmappedWithoutSelection.map(s => `<li>${s}</li>`).join('')}
+          </ul>
+          <p class="small mb-0">ท่านต้องการกลับไปเลือกผังบัญชีก่อน หรือยืนยันดึงต่อโดยไม่ระบุผังบัญชี?</p>
+        </div>
+      `;
+      const warnRes = await hosSafeNotify({
+        icon: 'warning',
+        title: 'พบสิทธิที่ยังไม่ได้ผูกผังบัญชี',
+        html: warnHtml,
+        showCancelButton: true,
+        confirmButtonColor: '#f59e0b',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: 'ดำเนินการต่อโดยไม่ระบุผัง',
+        cancelButtonText: 'กลับไปเลือกผังบัญชี'
+      });
+      if (!warnRes.isConfirmed) {
+        return;
+      }
+    }
+
+    // คำนวณยอดเคสที่จะดึงจริง (หักรายการที่ผู้ใช้ยกเว้นออก)
+    let actualCasesToPull = totalCasesToPull;
+    let totalExcludedAll = 0;
+    selectedOpdRights.forEach(pcode => {
+      const rk = `OPD:${pcode}`;
+      if (hosExcludedPatients[rk]) {
+        const exC = Object.keys(hosExcludedPatients[rk]).length;
+        totalExcludedAll += exC;
+        actualCasesToPull -= exC;
+      }
+    });
+    selectedIpdRights.forEach(pcode => {
+      const rk = `IPD:${pcode}`;
+      if (hosExcludedPatients[rk]) {
+        const exC = Object.keys(hosExcludedPatients[rk]).length;
+        totalExcludedAll += exC;
+        actualCasesToPull -= exC;
+      }
+    });
+
+    const confirmRes = await hosSafeNotify({
+      title: 'ยืนยันการดึงข้อมูลจาก HOSxP?',
+      html: `
+        <div class="text-start">
+          <p class="mb-2">ระบบจะดึงข้อมูลผู้ป่วยรายตัวและบันทึกลงฐานข้อมูล eDHS:</p>
+          <ul class="small text-muted mb-3">
+            <li><strong>จำนวนสิทธิที่เลือก:</strong> ${checkedBoxes.length} สิทธิ</li>
+            <li><strong>OPD:</strong> ${selectedOpdRights.length} สิทธิ | <strong>IPD:</strong> ${selectedIpdRights.length} สิทธิ</li>
+            ${totalExcludedAll > 0 ? `<li class="text-warning"><strong>รายการที่ยกเว้นไม่นำเข้า:</strong> ${totalExcludedAll.toLocaleString()} ราย</li>` : ''}
+            <li><strong>เคสสุทธิที่จะนำเข้า:</strong> ~${Math.max(0, actualCasesToPull).toLocaleString()} รายการ</li>
+          </ul>
+        </div>
+      `,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#10b981',
+      cancelButtonColor: '#64748b',
+      confirmButtonText: '<i class="bx bx-cloud-download"></i> ยืนยันเริ่มดึงข้อมูล',
+      cancelButtonText: 'ยกเลิก'
+    });
+
+    if (!confirmRes.isConfirmed) return;
+
+    // เตรียม UI แสดงความคืบหน้า
+    isPullingInProgress = true;
+    document.getElementById('btnStartPull').disabled = true;
+    document.getElementById('btnPreviewHos').disabled = true;
+    
+    const progressBox = document.getElementById('hosProgressBox');
+    const progressBar = document.getElementById('hosProgressBarInner');
+    const statusText = document.getElementById('hosProgressStatusText');
+    const percentText = document.getElementById('hosProgressPercentText');
+    const detailText = document.getElementById('hosProgressDetailText');
+    const cntInserted = document.getElementById('cntHosInserted');
+    const cntUpdated = document.getElementById('cntHosUpdated');
+    const cntSkipped = document.getElementById('cntHosSkipped');
+
+    if (progressBox) {
+      progressBox.style.display = 'block';
+      progressBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    let totalInserted = 0;
+    let totalUpdated = 0;
+    let totalSkipped = 0;
+    let grandProcessed = 0;
+    const batchSize = 500;
+
     // ----------------------------------------------------
     // 1. ดึงชุดข้อมูล OPD (ถ้ามีสิทธิ OPD ที่เลือก)
     // ----------------------------------------------------
@@ -2666,16 +2720,21 @@ async function startHosBatchPull() {
       errMsg = typeof err === 'object' ? JSON.stringify(err) : String(err);
     }
 
-    statusText.innerHTML = `<span class="text-danger"><i class="bx bx-error"></i> เกิดข้อผิดพลาด: ${errMsg}</span>`;
-    Swal.fire({
+    const statusTextEl = document.getElementById('hosProgressStatusText');
+    if (statusTextEl) {
+      statusTextEl.innerHTML = `<span class="text-danger"><i class="bx bx-error"></i> เกิดข้อผิดพลาด: ${errMsg}</span>`;
+    }
+    await hosSafeNotify({
       icon: 'error',
       title: 'เกิดข้อผิดพลาดระหว่างนำเข้า',
       html: `<div class="text-start alert alert-danger mb-0" style="font-size:0.9rem; word-break:break-word;">${errMsg}</div>`
     });
   } finally {
     isPullingInProgress = false;
-    document.getElementById('btnStartPull').disabled = false;
-    document.getElementById('btnPreviewHos').disabled = false;
+    const btnStart = document.getElementById('btnStartPull');
+    if (btnStart) btnStart.disabled = false;
+    const btnPreview = document.getElementById('btnPreviewHos');
+    if (btnPreview) btnPreview.disabled = false;
   }
 }
 
