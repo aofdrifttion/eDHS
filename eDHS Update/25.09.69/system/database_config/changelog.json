@@ -1,11 +1,11 @@
 {
-    "current_version": "25.09.69",
-    "last_updated": "2026-09-25",
+    "current_version": "01.10.69",
+    "last_updated": "2026-10-01",
     "releases": [
         {
             "version": "01.10.69",
             "date": "2026-10-01",
-            "title": "พัฒนาระบบคัดกรองเลือกลูกหนี้รายคนก่อนนำเข้าตรงจาก HOSxP, เพิ่มคอลัมน์สถานพยาบาลหลัก (hosmain), แก้ไขระบบค้นหาลูกหนี้ OPD\/IPD ครบทุกมิติ, แก้ไข Badge ประเภทผู้ป่วย และยกระดับระบบเปรียบเทียบเวอร์ชันรองรับการเปลี่ยนผ่านงวดเดือน (v01.10.69)",
+            "title": "พัฒนาระบบคัดกรองเลือกลูกหนี้รายคนก่อนนำเข้าตรงจาก HOSxP, เพิ่มคอลัมน์สถานพยาบาลหลัก (hosmain), แก้ไขระบบค้นหาลูกหนี้ OPD/IPD ครบทุกมิติ, แก้ไข Badge ประเภทผู้ป่วย และยกระดับระบบเปรียบเทียบเวอร์ชันรองรับการเปลี่ยนผ่านงวดเดือน (v01.10.69)",
             "type": "feature",
             "badge": "bg-primary",
             "changes": [
@@ -25,7 +25,7 @@
                 },
                 {
                     "category": "fix",
-                    "tag": "แก้ไขการแสดง Badge ประเภทผู้ป่วย (OPD \/ IPD) และความเข้ากันได้ของการลบรายบุคคล",
+                    "tag": "แก้ไขการแสดง Badge ประเภทผู้ป่วย (OPD / IPD) และความเข้ากันได้ของการลบรายบุคคล",
                     "color": "warning",
                     "icon": "bx-badge-check",
                     "description": "แก้ไขปัญหา Case Sensitivity ใน JavaScript ที่ทำให้เคสผู้ป่วยนอก (OPD) แสดง Badge สีเขียวเป็น IPD ทั้งหมด ให้แสดง Badge สีน้ำเงิน OPD และสีเขียว IPD ตรงตามประเภทจริง 100% พร้อมปรับปรุง API delete_selected_patients ให้รองรับทั้งพารามิเตอร์ keys และ items อย่างสมบูรณ์แบบ ภายใต้มาตรฐาน Financial Safety Lock 100%"
@@ -36,6 +36,13 @@
                     "color": "success",
                     "icon": "bx-git-repo-forked",
                     "description": "พัฒนาระบบ compare_edhs_versions() และ normalize_edhs_version() ใน update_core.php และ version_helper.php ให้แปลงรูปแบบเวอร์ชัน วว.ดด.ปป (DD.MM.YY) เป็นลำดับกาลเวลาที่ถูกต้องตามหลักสากล แก้ไขปัญหาข้อจำกัดของ version_compare เดิมที่ทำให้เวอร์ชันข้ามเดือน (เช่น 01.10.69 หลัง 25.09.69) ไม่ถูกตรวจจับเป็นเวอร์ชันใหม่"
+                },
+                {
+                    "category": "fix",
+                    "tag": "แก้ไขปุ่มยืนยันดึงข้อมูลเข้าสู่ระบบกดไม่ทำงาน (HTML Div Nesting & Pointer-Events Trap)",
+                    "color": "danger",
+                    "icon": "bx-check-double",
+                    "description": "แก้ไขโครงสร้างแท็ก HTML ใน modal_direct_debtor_pull.php ที่มีการปิด </div> เกินก่อน .modal-footer ทำให้ส่วน Footer หลุดออกไปอยู่นอก .modal-content ส่งผลให้โดน pointer-events: none ของ Bootstrap modal-dialog ครอบทับจนคลิกปุ่ม 'ยืนยันดึงข้อมูลเข้าสู่ระบบ' และ 'ปิดหน้าต่าง' ไม่ทำงาน พร้อมปรับปรุง hosSafeNotify() รองรับ Native Fallback ป้องกันการค้างจาก CDN SweetAlert2 และเสริม z-index แสดงผลทับทุกเลเยอร์อย่างถูกต้อง 100%"
                 }
             ]
         },
