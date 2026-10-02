@@ -1620,7 +1620,7 @@ if ($action === 'pull_batch') {
                     if (is_debtor_setting_effective_for_month($ds_cfg, $monthtxt)) {
                         $escaped_m = mysqli_real_escape_string($conn, $monthtxt);
                         $not_kidney_sql = "AND (pttypename NOT LIKE '%ฟอกไต%' AND pttypename NOT LIKE '%ไต%' AND (department IS NULL OR department NOT LIKE '%ไต%') AND (clinic IS NULL OR clinic NOT LIKE '%ไต%'))";
-                        $not_billed_sql = "AND (bill IS NULL OR bill = '' OR bill = '-') AND (mobile IS NULL OR mobile = '' OR mobile = '-')";
+                        $not_billed_sql = "AND (follow_money IS NULL OR follow_money = 0 OR follow_money = '' OR follow_money = '0.00') AND (mobile IS NULL OR mobile = '' OR mobile = '-')";
                         
                         // 1. ผัง 1102050101.203 (ในสังกัด สธ.) - ตั้งหนี้ 175 บาท 100% ทุกเคสตามข้อตกลง
                         $acc_203_base = floatval($ds_cfg['acc_203']['base_rate'] ?? 175.0);

@@ -58,8 +58,9 @@ if (file_exists($config_file)) {
 // เงื่อนไขคุ้มครองยกเว้นเคสไตเทียม 100%
 $not_kidney_condition = "AND (pttypename NOT LIKE '%ฟอกไต%' AND pttypename NOT LIKE '%ไต%' AND (department IS NULL OR department NOT LIKE '%ไต%') AND (clinic IS NULL OR clinic NOT LIKE '%ไต%'))";
 
-// เงื่อนไขคุ้มครองรายการที่ออกใบเสร็จหรือตัดหนี้แล้ว (ห้ามแก้ไขยอดหนี้ที่ชำระ/ออกบิลแล้ว)
-$not_billed_condition = "AND (bill IS NULL OR bill = '' OR bill = '-') AND (mobile IS NULL OR mobile = '' OR mobile = '-')";
+// เงื่อนไขคุ้มครองรายการที่ตัดหนี้หรือรับชำระเงินแล้วจริง (ห้ามแก้ไขยอดหนี้ที่มีการรับเงินหรือตัดจ่ายแล้ว)
+// รายการที่มีเพียงเลขหนังสือ/บิล โดยยังไม่ได้รับชำระเงิน (follow_money = 0 และ mobile = '-') จะไม่ถูกบล็อกการกู้คืน/ปรับปรุงยอด
+$not_billed_condition = "AND (follow_money IS NULL OR follow_money = 0 OR follow_money = '' OR follow_money = '0.00') AND (mobile IS NULL OR mobile = '' OR mobile = '-')";
 
 if ($enabled === '1') {
     // -------------------------------------------------------------
@@ -130,29 +131,17 @@ if ($enabled === '1') {
 
         // คืนค่าผัง 1102050101.203
         $conn->query("UPDATE imr_tb_debtor_rights_opd 
-                      SET debit = original_debit 
+                      SET debit = original_debit, original_debit = NULL 
                       WHERE accountcode = '1102050101.203' 
                         AND original_debit IS NOT NULL 
-                        $not_billed_condition 
-                        $outside_month_sql");
-        
-        $conn->query("UPDATE imr_tb_debtor_rights_opd 
-                      SET original_debit = NULL 
-                      WHERE accountcode = '1102050101.203' 
                         $not_billed_condition 
                         $outside_month_sql");
 
         // คืนค่าผัง 1102050102.201
         $conn->query("UPDATE imr_tb_debtor_rights_opd 
-                      SET debit = original_debit 
+                      SET debit = original_debit, original_debit = NULL 
                       WHERE accountcode = '1102050102.201' 
                         AND original_debit IS NOT NULL 
-                        $not_billed_condition 
-                        $outside_month_sql");
-
-        $conn->query("UPDATE imr_tb_debtor_rights_opd 
-                      SET original_debit = NULL 
-                      WHERE accountcode = '1102050102.201' 
                         $not_billed_condition 
                         $outside_month_sql");
     }
@@ -163,26 +152,16 @@ if ($enabled === '1') {
     // -------------------------------------------------------------
     // 1. คืนค่าผัง 1102050101.203
     $conn->query("UPDATE imr_tb_debtor_rights_opd 
-                  SET debit = original_debit 
+                  SET debit = original_debit, original_debit = NULL 
                   WHERE accountcode = '1102050101.203' 
                     AND original_debit IS NOT NULL 
-                    $not_billed_condition");
-    
-    $conn->query("UPDATE imr_tb_debtor_rights_opd 
-                  SET original_debit = NULL 
-                  WHERE accountcode = '1102050101.203' 
                     $not_billed_condition");
     
     // 2. คืนค่าผัง 1102050102.201
     $conn->query("UPDATE imr_tb_debtor_rights_opd 
-                  SET debit = original_debit 
+                  SET debit = original_debit, original_debit = NULL 
                   WHERE accountcode = '1102050102.201' 
                     AND original_debit IS NOT NULL 
-                    $not_billed_condition");
-    
-    $conn->query("UPDATE imr_tb_debtor_rights_opd 
-                  SET original_debit = NULL 
-                  WHERE accountcode = '1102050102.201' 
                     $not_billed_condition");
 }
 
