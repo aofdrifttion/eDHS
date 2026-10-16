@@ -1548,23 +1548,44 @@ if (!function_exists('get_cr_splitting_summary_for_month')) {
 
                     // 🔒 หากเคสนี้เคยถูกบันทึกตั้งหนี้ไว้แล้วในตาราง imr_tb_debtor_cr_breakdown
                     // ให้ยึดยอดเงิน item_amount, general_remain_amount และรายการเดิม 100% ห้ามเปลี่ยนตาม HOSxP
+                    // โดยเคสต้องเข้าเกณฑ์ CR ในปัจจุบัน (detected_map) หรือมี snapshot items_data ที่บันทึกไว้จริง
                     $is_locked_from_breakdown = false;
                     if (isset($cr_bd_existing_map[$vn])) {
                         $bd_ex = $cr_bd_existing_map[$vn];
-                        $is_locked_from_breakdown = true;
-                        $cr_amt = floatval($bd_ex['item_amount']);
-                        $parent_remain = floatval($bd_ex['general_remain_amount']);
-                        $transfer_out_from_parent = ($p_acc === '1102050101.203' && !empty($v['original_debit'])) ? 0.0 : $cr_amt;
-                        $is_full_transfer = ($parent_remain <= 0.001);
+                        $has_saved_items = (!empty($bd_ex['items_data']) && $bd_ex['items_data'] !== '[]' && $bd_ex['items_data'] !== 'null');
+                        $is_currently_detected = ($cr_info && !empty($cr_info['cr_types']));
 
-                        // ดึง Snapshot รายการเดิมจาก items_data ถ้ามี
-                        $saved_items = (!empty($bd_ex['items_data'])) ? json_decode($bd_ex['items_data'], true) : null;
-                        $types_arr = array_filter(array_map('trim', explode(',', $bd_ex['cr_type'])));
-                        $cr_info = [
-                            'cr_types' => !empty($types_arr) ? $types_arr : ($cr_info['cr_types'] ?? ['CR-บริการเฉพาะ']),
-                            'cr_total_amount' => $cr_amt,
-                            'items' => (is_array($saved_items) && !empty($saved_items)) ? $saved_items : ($cr_info['items'] ?? [])
-                        ];
+                        if ($is_currently_detected || $has_saved_items) {
+                            $types_arr = array_filter(array_map('trim', explode(',', $bd_ex['cr_type'])));
+                            // 🌟 ลำดับความสำคัญ (Priority Rule): หากบันทึกเดิมมีกลุ่มโอน 100% (CR-AE หรือ CR-เกิดสิทธิทันที) 
+                            // แต่กลุ่มดังกล่าวปิดใช้งานอยู่ ให้ตัด CR-walkin ออกด้วยตามกฎความสำคัญสูงสุด
+                            if (in_array('CR-AE', $types_arr) && !is_cr_subgroup_enabled($config, 'CR-AE', $visit_type, $monthtxt)) {
+                                $types_arr = array_values(array_diff($types_arr, ['CR-AE', 'CR-walkin']));
+                            }
+                            if (in_array('CR-เกิดสิทธิทันที', $types_arr) && !is_cr_subgroup_enabled($config, 'CR-เกิดสิทธิทันที', $visit_type, $monthtxt)) {
+                                $types_arr = array_values(array_diff($types_arr, ['CR-เกิดสิทธิทันที', 'CR-walkin']));
+                            }
+
+                            $active_types = array_values(array_filter($types_arr, function($t) use ($config, $visit_type, $monthtxt) {
+                                return is_cr_subgroup_enabled($config, $t, $visit_type, $monthtxt);
+                            }));
+
+                            if (!empty($active_types)) {
+                                $is_locked_from_breakdown = true;
+                                $cr_amt = floatval($bd_ex['item_amount']);
+                                $parent_remain = floatval($bd_ex['general_remain_amount']);
+                                $transfer_out_from_parent = ($p_acc === '1102050101.203' && !empty($v['original_debit'])) ? 0.0 : $cr_amt;
+                                $is_full_transfer = ($parent_remain <= 0.001);
+
+                                // ดึง Snapshot รายการเดิมจาก items_data ถ้ามี
+                                $saved_items = $has_saved_items ? json_decode($bd_ex['items_data'], true) : null;
+                                $cr_info = [
+                                    'cr_types' => $active_types,
+                                    'cr_total_amount' => $cr_amt,
+                                    'items' => (is_array($saved_items) && !empty($saved_items)) ? $saved_items : ($cr_info['items'] ?? [])
+                                ];
+                            }
+                        }
                     }
 
                     if ($cr_info && !empty($cr_info['cr_types'])) {
@@ -1659,11 +1680,27 @@ if (!function_exists('get_cr_splitting_summary_for_month')) {
                 // 🔒 ตรวจสอบว่าเคสเดิมใน .216/.217 มีบันทึกใน breakdown หรือไม่
                 if (isset($cr_bd_existing_map[$vn])) {
                     $bd_ex = $cr_bd_existing_map[$vn];
-                    $d = floatval($bd_ex['item_amount']);
                     $saved_items = (!empty($bd_ex['items_data'])) ? json_decode($bd_ex['items_data'], true) : null;
                     $types_arr = array_filter(array_map('trim', explode(',', $bd_ex['cr_type'])));
-                    $types = !empty($types_arr) ? $types_arr : (($cr_info && !empty($cr_info['cr_types'])) ? $cr_info['cr_types'] : ['CR-Instrument']);
-                    $items_out = (is_array($saved_items) && !empty($saved_items)) ? $saved_items : ($cr_info['items'] ?? []);
+                    if (in_array('CR-AE', $types_arr) && !is_cr_subgroup_enabled($config, 'CR-AE', $visit_type, $monthtxt)) {
+                        $types_arr = array_values(array_diff($types_arr, ['CR-AE', 'CR-walkin']));
+                    }
+                    if (in_array('CR-เกิดสิทธิทันที', $types_arr) && !is_cr_subgroup_enabled($config, 'CR-เกิดสิทธิทันที', $visit_type, $monthtxt)) {
+                        $types_arr = array_values(array_diff($types_arr, ['CR-เกิดสิทธิทันที', 'CR-walkin']));
+                    }
+
+                    $active_types = array_values(array_filter($types_arr, function($t) use ($config, $visit_type, $monthtxt) {
+                        return is_cr_subgroup_enabled($config, $t, $visit_type, $monthtxt);
+                    }));
+
+                    if (!empty($active_types)) {
+                        $d = floatval($bd_ex['item_amount']);
+                        $types = $active_types;
+                        $items_out = (is_array($saved_items) && !empty($saved_items)) ? $saved_items : ($cr_info['items'] ?? []);
+                    } else {
+                        $types = ($cr_info && !empty($cr_info['cr_types'])) ? $cr_info['cr_types'] : ['CR-Instrument'];
+                        $items_out = $cr_info['items'] ?? [];
+                    }
                 } else {
                     $types = ($cr_info && !empty($cr_info['cr_types'])) ? $cr_info['cr_types'] : ['CR-Instrument'];
                     $items_out = $cr_info['items'] ?? [];

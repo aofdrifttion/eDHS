@@ -39,6 +39,13 @@
       "color": "info",
       "icon": "bx-receipt",
       "description": "รักษาความสมบูรณ์ของระบบตัดหนี้และใบเสร็จ (bill, billdate, compensated, settle_status) ในตาราง breakdown ให้คงอยู่อย่างปลอดภัยและสามารถบันทึกแก้ไขได้ตามปกติโดยไม่ส่งผลกระทบต่อยอดเงินตั้งหนี้ที่ถูกล็อกไว้"
+    },
+    {
+      "category": "fix",
+      "tag": "Reconciliation Audit & Subgroup Filter Protection",
+      "color": "success",
+      "icon": "bx-shield-quarter",
+      "description": "ปรับปรุง Snapshot Lock ให้ตรวจสอบสถานะเปิดใช้งานของกลุ่มย่อย (Active Subgroups) และเกณฑ์การตรวจจับ CR ป้องกันไม่ให้รายการของกลุ่มย่อยที่ถูกปิดใช้งาน (เช่น CR-AE) หรือเคสที่ไม่มี items_data ถูกดึงมาตั้งเป็นยอดโอน CR โดยพลการ ทำให้ยอดยันทะเบียนคุมลูกหนี้ตรงกับงบทดลอง 100%"
     }
   ]
 }
