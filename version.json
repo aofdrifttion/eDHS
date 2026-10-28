@@ -1,9 +1,9 @@
 {
-  "latest_version": "28.10.69",
+  "latest_version": "28.1.10.69",
   "release_date": "2026-10-28",
-  "title": "ระบบทะเบียนคุมอายุลูกหนี้ 36 ผังบัญชีสมบูรณ์แบบ แยก CR/SSS IPD พร้อมตัดยอดสะสม Cascading FIFO และระบบจัดเรียงผังบัญชีอัตโนมัติ (v28.10.69)",
-  "patch_folder": "28.10.69",
-  "min_php_version": "7.4.0",
+  "title": "อัปเดตระบบ v28.1.10.69: แก้ไข Warning plugin_rehab_hook, รองรับความเข้ากันได้ PHP 7.x ถึง 8.3+",
+  "patch_folder": "28.1.10.69",
+  "min_php_version": "7.0.0",
   "has_database_update": true,
   "changelog_summary": [
     "ระบบทะเบียนคุมอายุลูกหนี้: รองรับผังบัญชีครบทั้ง 36 ผัง พร้อมแยกบัญชีย่อย CR IPD (.217) และ SSS IPD (.310) เชื่อมโยงระบบตัดยอดสะสมข้ามบัญชีแบบ Cascading FIFO (< 3 เดือน -> 3-12 เดือน -> > 12 เดือน) และเพิ่ม Fallback Safeguard ดึงผังบัญชีจาก tb_code / สิทธิ OPD+IPD อัตโนมัติ",

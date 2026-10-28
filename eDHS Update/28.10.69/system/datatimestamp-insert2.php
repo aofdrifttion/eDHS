@@ -28,7 +28,17 @@ require './database_config/config.php';
 require_once './database_config/db_helper.php';
 require_once './includes/cr_migration_helper.php';
 require_once './includes/sss_migration_helper.php';
-require_once __DIR__ . '/includes/plugin_rehab_hook.php';
+if (file_exists(__DIR__ . '/includes/plugin_rehab_hook.php')) {
+    require_once __DIR__ . '/includes/plugin_rehab_hook.php';
+} elseif (file_exists('./includes/plugin_rehab_hook.php')) {
+    require_once './includes/plugin_rehab_hook.php';
+}
+
+if (!function_exists('rehab_hook_sync_vns')) {
+    function rehab_hook_sync_vns($conn, $targets, $visit_type = 'AUTO') {
+        return 0;
+    }
+}
 
 // รับประกันว่าตารางประวัติการแบ่งจ่าย (imr_tb_payment_history) มีอยู่เสมอ (Zero-Config Auto-Migration)
 if (function_exists('ensure_payment_history_table')) {

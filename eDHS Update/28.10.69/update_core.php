@@ -398,6 +398,7 @@ function download_patch_files_individually($baseDir, $targetVersion = null) {
         'system/debtor_excel.php',
         'system/get_debtor_detail.php',
         'system/includes/cr_migration_helper.php',
+        'system/includes/plugin_rehab_hook.php',
         'system/includes/sss_migration_helper.php',
         'system/printPDF_debtors.php',
         'system/ทะบียนคุมอายุลูกหนี้.php',
