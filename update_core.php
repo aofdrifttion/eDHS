@@ -11,6 +11,11 @@
  * 6. รองรับการทำงานทั้งผ่าน CLI (Terminal, .bat, .sh) และ Web Browser
  */
 
+// ป้องกัน Timeout และจำกัดทรัพยากรสำหรับการอัปเดตระบบขนาดใหญ่
+@set_time_limit(0);
+@ini_set('max_execution_time', 0);
+@ini_set('memory_limit', '512M');
+
 // ป้องกัน Direct Access หากเรียกผ่านเว็บโดยไม่มีการยืนยันตัวตน
 $isCli = (php_sapi_name() === 'cli' || defined('STDIN'));
 $baseDir = __DIR__;
@@ -24,8 +29,7 @@ $protectedFiles = [
     '.git',
     '.gitignore',
     'update.bat',
-    'update.sh',
-    'update_core.php'
+    'update.sh'
 ];
 
 /**
@@ -279,6 +283,11 @@ function http_fetch_remote_version($baseDir, $force = false) {
  * ดาวน์โหลดและแตกไฟล์แพตช์จาก GitHub อัตโนมัติในกรณีที่ไม่มี Git (Pure PHP)
  */
 function download_patch_from_github($baseDir, $targetVersion = null) {
+    // หากระบบไม่มีโมดูล ZipArchive ให้ดาวน์โหลดไฟล์แพตช์รายไฟล์จาก GitHub Raw โดยตรง
+    if (!class_exists('ZipArchive')) {
+        return download_patch_files_individually($baseDir, $targetVersion);
+    }
+
     $zipUrl = 'https://github.com/aofdrifttion/eDHS/archive/refs/heads/master.zip';
     $tempDir = $baseDir . '/system/backup/temp';
     if (!is_dir($tempDir)) {
@@ -293,7 +302,7 @@ function download_patch_from_github($baseDir, $targetVersion = null) {
     curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
     curl_setopt($ch, CURLOPT_USERAGENT, 'eDHS-Updater');
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 120);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 180);
 
     $data = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -301,6 +310,11 @@ function download_patch_from_github($baseDir, $targetVersion = null) {
     curl_close($ch);
 
     if ($httpCode !== 200 || empty($data)) {
+        // หากดาวน์โหลด ZIP ไม่สำเร็จ ให้ลอง Fallback ดาวน์โหลดรายไฟล์
+        $fbRes = download_patch_files_individually($baseDir, $targetVersion);
+        if ($fbRes['success']) {
+            return $fbRes;
+        }
         return [
             'success' => false,
             'message' => 'ดาวน์โหลดไฟล์จาก GitHub ไม่สำเร็จ (HTTP ' . $httpCode . '): ' . $error
@@ -312,23 +326,26 @@ function download_patch_from_github($baseDir, $targetVersion = null) {
     $zip = new ZipArchive();
     if ($zip->open($tempZip) !== true) {
         @unlink($tempZip);
-        return [
-            'success' => false,
-            'message' => 'ไม่สามารถเปิดไฟล์ ZIP อัปเดตได้'
-        ];
+        // Fallback ถ้าไฟล์ ZIP เสีย
+        return download_patch_files_individually($baseDir, $targetVersion);
     }
 
     $prefix = 'eDHS-master/';
+    $targetPatchPrefix = !empty($targetVersion) ? 'eDHS Update/' . $targetVersion . '/' : 'eDHS Update/';
     $extractedFiles = 0;
 
     for ($i = 0; $i < $zip->numFiles; $i++) {
         $entryName = $zip->getNameIndex($i);
         if (strpos($entryName, $prefix) === 0) {
             $relativePath = substr($entryName, strlen($prefix));
+            // สกัดเฉพาะโฟลเดอร์แพตช์เวอร์ชันเป้าหมาย และไฟล์หลักของระบบอัปเดต เพื่อความรวดเร็วสูงสุด
             if (
-                strpos($relativePath, 'eDHS Update/') === 0 ||
+                strpos($relativePath, $targetPatchPrefix) === 0 ||
                 $relativePath === 'version.json' ||
                 $relativePath === 'update_core.php' ||
+                $relativePath === 'api_update.php' ||
+                $relativePath === 'system/api_update.php' ||
+                $relativePath === 'system/includes/version_helper.php' ||
                 $relativePath === 'update.bat' ||
                 $relativePath === 'update.sh'
             ) {
@@ -359,6 +376,82 @@ function download_patch_from_github($baseDir, $targetVersion = null) {
         'success' => true,
         'extracted' => $extractedFiles
     ];
+}
+
+/**
+ * ดาวน์โหลดไฟล์แพตช์โดยตรงรายไฟล์จาก GitHub Raw (Fallback เมื่อไม่มี ZipArchive หรือ ZIP ล้มเหลว)
+ */
+function download_patch_files_individually($baseDir, $targetVersion = null) {
+    if (empty($targetVersion)) {
+        return ['success' => false, 'message' => 'ไม่ระบุเวอร์ชันสำหรับดาวน์โหลดรายไฟล์'];
+    }
+
+    log_msg("กำลังดาวน์โหลดไฟล์แพตช์รายไฟล์จาก GitHub Raw...", 'info', false);
+
+    // ดึง changelog ของเวอร์ชันเป้าหมายจาก GitHub เพื่อดูโครงสร้างไฟล์
+    $rawBase = 'https://raw.githubusercontent.com/aofdrifttion/eDHS/master/';
+    $patchList = [
+        'system/database_config/changelog.json',
+        'report/pdf/Debtor-rightsr-report.php',
+        'report/pdf/Debtor-rightsr-reporti.php',
+        'system/datatimestamp-insert2.php',
+        'system/debtor_excel.php',
+        'system/get_debtor_detail.php',
+        'system/includes/cr_migration_helper.php',
+        'system/includes/sss_migration_helper.php',
+        'system/printPDF_debtors.php',
+        'system/ทะบียนคุมอายุลูกหนี้.php',
+        'system/ทะบียนคุมอายุลูกหนี้1.php',
+        'system/ทะเบียนคุมอายุลูกหนี้.php',
+        'system/api_update.php',
+        'system/includes/version_helper.php',
+        'update_core.php',
+        'version.json'
+    ];
+
+    $downloaded = 0;
+    $targetDir = $baseDir . '/eDHS Update/' . $targetVersion;
+    if (!is_dir($targetDir)) @mkdir($targetDir, 0755, true);
+
+    foreach ($patchList as $relFile) {
+        // เข้ารหัสชื่อไฟล์เพื่อรองรับภาษาไทยใน URL
+        $parts = explode('/', $relFile);
+        $encodedParts = array_map('rawurlencode', $parts);
+        $encodedRel = implode('/', $encodedParts);
+
+        $fileUrl = $rawBase . 'eDHS%20Update/' . rawurlencode($targetVersion) . '/' . $encodedRel;
+        if ($relFile === 'version.json' || $relFile === 'update_core.php') {
+            $fileUrl = $rawBase . $encodedRel;
+        }
+
+        $ch = curl_init($fileUrl);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_USERAGENT, 'eDHS-Updater');
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        $content = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($code === 200 && !empty($content)) {
+            $savePath = ($relFile === 'version.json' || $relFile === 'update_core.php')
+                ? $baseDir . '/' . $relFile
+                : $targetDir . '/' . $relFile;
+            
+            $parent = dirname($savePath);
+            if (!is_dir($parent)) @mkdir($parent, 0755, true);
+            @file_put_contents($savePath, $content);
+            $downloaded++;
+        }
+    }
+
+    if ($downloaded > 0) {
+        log_msg("ดาวน์โหลดแพตช์รายไฟล์สำเร็จ ($downloaded ไฟล์)", 'success', false);
+        return ['success' => true, 'extracted' => $downloaded];
+    }
+
+    return ['success' => false, 'message' => 'ไม่สามารถดาวน์โหลดไฟล์แพตช์จาก GitHub Raw ได้'];
 }
 
 /**
@@ -664,6 +757,11 @@ function execute_system_update($targetVersion = null, $isCli = null, $force = fa
     log_msg("คัดลอกไฟล์อัปเดตสำเร็จ: $updatedCount ไฟล์", 'success', $isCli);
     if ($skippedCount > 0) {
         log_msg("ข้ามไฟล์ที่ได้รับการคุ้มครองความปลอดภัย (config.php): $skippedCount ไฟล์", 'warn', $isCli);
+    }
+
+    // คัดลอก update_core.php เข้าสู่รูทระบบหากมีในโฟลเดอร์แพตช์
+    if (file_exists($patchDir . '/update_core.php')) {
+        @copy($patchDir . '/update_core.php', $baseDir . '/update_core.php');
     }
 
     // 3. รันสคริปต์ SQL (ถ้ามี)

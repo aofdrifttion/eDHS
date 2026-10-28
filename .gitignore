@@ -12,6 +12,7 @@
 !/.gitignore
 !/GIT_PULL_AND_UPDATE_PLAN.md
 !/version.json
+!/api_update.php
 !/update_core.php
 !/update.bat
 !/update.sh
