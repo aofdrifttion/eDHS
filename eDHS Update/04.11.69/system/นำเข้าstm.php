@@ -709,7 +709,7 @@ $yyy = date("Y")+543;
                           </label>
                           <select name="stm_service_type" id="stm_service_type" class="form-select stm-select">
                             <option value="AUTO" selected>🤖 ตรวจจับอัตโนมัติตามชื่องวด/ไฟล์</option>
-                            <option value="CR" id="opt_cr_service">⭐ บริการเฉพาะ (CR / Fee Schedule - ผัง 216)</option>
+                            <option value="CR" id="opt_cr_service">⭐ บริการเฉพาะ (CR / Fee Schedule)</option>
                             <option value="NORMAL">📋 เหมาจ่าย / บริการทั่วไป (ผังปกติ)</option>
                           </select>
                         </div>
@@ -1169,7 +1169,9 @@ $yyy = date("Y")+543;
         var isCrFile = (fn.indexOf('_02') !== -1 || fn.indexOf('CR') !== -1 || fn.indexOf('INDIVIDUAL') !== -1);
         
         // สลับข้อความใน Dropdown ตัวเลือก CR
-        if (isIpd) {
+        if (!fn) {
+          $('#opt_cr_service').text('⭐ บริการเฉพาะ (CR / Fee Schedule)');
+        } else if (isIpd) {
           $('#opt_cr_service').text('⭐ บริการเฉพาะ (CR / Fee Schedule - ผัง 217 IPD)');
         } else {
           $('#opt_cr_service').text('⭐ บริการเฉพาะ (CR / Fee Schedule - ผัง 216 OPD)');
@@ -1177,13 +1179,13 @@ $yyy = date("Y")+543;
 
         // จัดการสถานะ badge และค่าใน dropdown
         var currentServiceType = $('#stm_service_type').val();
-        if (isCrFile) {
+        if (fn && isCrFile) {
           $('#stm_service_type').val('CR');
           var crLabel = isIpd ? 'ผัง 217 (IPD)' : 'ผัง 216 (OPD)';
           $('#cr_badge_hint').removeClass('d-none').html("<i class='bx bx-check'></i> ตรวจพบ CR " + crLabel);
         } else if (currentServiceType === 'CR') {
-          var crLabel = isIpd ? 'ผัง 217 (IPD)' : 'ผัง 216 (OPD)';
-          $('#cr_badge_hint').removeClass('d-none').html("<i class='bx bx-check'></i> บังคับตัด CR " + crLabel);
+          var crLabel = fn ? (isIpd ? ' ผัง 217 (IPD)' : ' ผัง 216 (OPD)') : '';
+          $('#cr_badge_hint').removeClass('d-none').html("<i class='bx bx-check'></i> บังคับตัด CR" + crLabel);
         } else {
           $('#cr_badge_hint').addClass('d-none');
         }
