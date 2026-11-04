@@ -457,7 +457,15 @@ if ($is_child_acc) {
                             $r_in['type'] = $visit_type;
                             $r_in['age'] = $age;
 
-                            list($r_bill, $r_billdate) = resolve_debtor_receipt($r_in, $conn, $r_in['bd_bill'] ?? null, $r_in['bd_billdate'] ?? null);
+                            if (empty($vinfo['is_full_transfer'])) {
+                                $r_in_clean = $r_in;
+                                $r_in_clean['bill'] = '';
+                                $r_in_clean['billdate'] = '';
+                                $r_in_clean['mobile'] = '';
+                                list($r_bill, $r_billdate) = resolve_debtor_receipt($r_in_clean, $conn, $r_in['bd_bill'] ?? null, $r_in['bd_billdate'] ?? null);
+                            } else {
+                                list($r_bill, $r_billdate) = resolve_debtor_receipt($r_in, $conn, $r_in['bd_bill'] ?? null, $r_in['bd_billdate'] ?? null);
+                            }
                             $r_in['resolved_bill'] = $r_bill;
                             $r_in['resolved_billdate'] = $r_billdate;
                             $final_rows[] = $r_in;

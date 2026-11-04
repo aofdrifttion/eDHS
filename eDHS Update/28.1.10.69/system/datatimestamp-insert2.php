@@ -2675,12 +2675,19 @@ if (isset($_POST['action2'])) {
                         o.accountcode, o.accountname,
                         o.an, o.hn, o.dchdate, o.cid, o.ptname,
                         o.uc_money, o.debit, o.income, o.admdate,
+                        stm.mother_comp,
                         stm.compensated,
-                        (o.uc_money - COALESCE(stm.compensated, 0)) as diff,
+                        (o.uc_money - COALESCE(stm.mother_comp, stm.compensated, 0)) as diff,
                         (o.income - COALESCE(o.original_debit, o.debit)) as incomediff,
                         o.billdate, o.mobile, o.pttypename, o.follow_money, o.monthtxt
                     FROM imr_tb_debtor_rights_ipd o
-                    LEFT JOIN imr_tb_check_invoice stm on stm.vn = o.an
+                    LEFT JOIN (
+                        SELECT vn, MAX(rep) as rep,
+                               SUM(CASE WHEN accountcode NOT IN ('1102050101.216', '1102050101.217') THEN compensated ELSE 0 END) as mother_comp,
+                               SUM(compensated) as compensated
+                        FROM imr_tb_check_invoice
+                        GROUP BY vn
+                    ) stm on stm.vn = o.an
                     WHERE $condition_ipd AND $date_condition_stm_i
                     GROUP BY o.an
                     ORDER BY o.accountcode ASC, o.dchdate ASC";
@@ -2814,9 +2821,15 @@ if (isset($_POST['action2'])) {
                             $row['bill'] = $cr_bd_map_i[$an]['bill'];
                             $row['billdate'] = $cr_bd_map_i[$an]['billdate'];
                             if (!empty($cr_bd_map_i[$an]['bill'])) $row['bookno'] = $cr_bd_map_i[$an]['bill'];
+                            $row['mobile'] = $cr_bd_map_i[$an]['bill'];
                         } else {
-                            $row['follow_money'] = min(cleanNum($row['follow_money'] ?? 0), floatval($vinfo['cr_amount']));
-                            $row['compensated'] = $row['follow_money'];
+                            // เคสโอนเข้าผังลูก (1102050101.217): ต้องตัดฝั่งแม่ก่อนเสมอ ฝั่งลูกจะมี STM มาตัดอีกที
+                            $row['follow_money'] = 0.0;
+                            $row['compensated'] = 0.0;
+                            $row['bill'] = '';
+                            $row['billdate'] = '';
+                            $row['bookno'] = '';
+                            $row['mobile'] = '';
                         }
                     } else {
                         $row['cr_origin_acc'] = '1102050101.217';
@@ -2908,8 +2921,12 @@ if (isset($_POST['action2'])) {
                             $row['items'] = (!empty($saved_cr_items) && is_array($saved_cr_items)) ? $saved_cr_items : (isset($cr_map_ipd[$an]['items']) ? $cr_map_ipd[$an]['items'] : []);
 
                             // หักเงินชดเชยที่โอนไปผังลูกออก
-                            $cr_comp = isset($cr_bd_map_i[$an]) ? cleanNum($cr_bd_map_i[$an]['compensated']) : min(cleanNum($row['compensated'] ?? $row['follow_money']), floatval($vinfo['cr_amount']));
-                            $mother_comp = max(0, cleanNum($row['compensated'] ?? $row['follow_money']) - $cr_comp);
+                            $cr_comp = isset($cr_bd_map_i[$an]) ? cleanNum($cr_bd_map_i[$an]['compensated']) : (floatval($vinfo['cr_compensated'] ?? 0));
+                            if (isset($row['mother_comp']) && cleanNum($row['mother_comp']) > 0 && cleanNum($row['mother_comp']) < cleanNum($row['compensated'])) {
+                                $mother_comp = cleanNum($row['mother_comp']);
+                            } else {
+                                $mother_comp = max(0, cleanNum($row['compensated'] ?? $row['follow_money']) - $cr_comp);
+                            }
                             $row['follow_money'] = $mother_comp;
                             $row['compensated'] = $mother_comp;
 
@@ -3310,13 +3327,13 @@ if (isset($_POST['action2'])) {
 
         if(isset($_POST['actionstmvlookup'])){
 
-          $sql = "SELECT stm.yearbudget,o.mobile as mobileo,i.mobile as mobilei,stm.rep,SUM(stm.compensated) as compensated,stm.accountname,stm.fund,count(stm.rep) as ccall,stm.accountcode
+          $sql = "SELECT stm.yearbudget, MAX(stm.bill) as stm_bill, MAX(stm.billdate) as stm_billdate, o.mobile as mobileo, i.mobile as mobilei, stm.rep, SUM(stm.compensated) as compensated, stm.accountname, stm.fund, count(stm.rep) as ccall, stm.accountcode
           FROM imr_tb_check_invoice stm
           LEFT JOIN  imr_tb_debtor_rights_opd o on o.vn=stm.vn
           LEFT JOIN  imr_tb_debtor_rights_ipd i on i.an=stm.vn
           WHERE (UPPER(TRIM(stm.fund)) = 'UCS' OR (stm.compensated != '0' AND stm.compensated != '0.0' AND stm.compensated != '0.00'))
-          GROUP BY stm.rep
-          ORDER BY stm.rep desc";
+          GROUP BY stm.rep, stm.accountcode
+          ORDER BY stm.rep desc, stm.accountcode asc";
 
           $result = mysqli_query($conn, $sql);
 
@@ -3339,67 +3356,40 @@ if (isset($_POST['action2'])) {
           // output data of each row
           $i=1;$san=0;$srcpt_money=0;$ccall=0;
           while ($row = mysqli_fetch_assoc($result)) {
-    if (isset($row['cid'])) $row['cid'] = decrypt_data($row['cid']);
-    if (isset($row['tel'])) $row['tel'] = decrypt_data($row['tel']);
+            if (isset($row['cid'])) $row['cid'] = decrypt_data($row['cid']);
+            if (isset($row['tel'])) $row['tel'] = decrypt_data($row['tel']);
 
-            if($row["mobileo"]<>''){
-                    if($row["mobileo"]<>'' and $row["mobileo"]<>'-'){
-                    echo'<tr>
-                          <td style="color: green;">'.$row["yearbudget"].'</td>
-                          <td style="color: green;">'.$row["mobileo"].'</td>
-                          <td><a style="color: green;" href="#" onclick="stmgeto(\''.$row["rep"].'\')">'.$row["rep"].'</a></td>
-                          <td><a style="color: green;" href="#" onclick="stmgeto(\''.$row["rep"].'\')">'.$row["accountname"].'</a></td>
-                          <td style="color: green;">'.$row["fund"].'</td>
-                          <td style="color: green;">'.formatMoney($row["compensated"], 2).'</td>
-                          <td style="color: green;">'.$row["ccall"].'</td>
-                        </tr>
-                    ';
-                    }else{
-                      echo'<tr>
-                            <td>'.$row["yearbudget"].'</td>
-                            <td>'.$row["mobileo"].'</td>
-                            <td><a href="#" onclick="stmgeto(\''.$row["rep"].'\')">'.$row["rep"].'</a></td>
-                            <td><a href="#" onclick="stmgeto(\''.$row["rep"].'\')">'.$row["accountname"].'</a></td>
-                            <td>'.$row["fund"].'</td>
-                            <td>'.formatMoney($row["compensated"], 2).'</td>
-                            <td>'.$row["ccall"].'</td>
-                          </tr>
-                      ';
-                      }
-
-            }else{
-
-                   if($row["mobilei"]<>'' and $row["mobilei"]<>'-'){
-                    echo'<tr>
-                          <td style="color: green;">'.$row["yearbudget"].'</td>
-                          <td style="color: green;">'.$row["mobilei"].'</td>
-                          <td><a style="color: green;" href="#" onclick="stmgeto(\''.$row["rep"].'\')">'.$row["rep"].'</a></td>
-                          <td><a style="color: green;" href="#" onclick="stmgeto(\''.$row["rep"].'\')">'.$row["accountname"].'</a></td>
-                          <td style="color: green;">'.$row["fund"].'</td>
-                          <td style="color: green;">'.formatMoney($row["compensated"], 2).'</td>
-                          <td style="color: green;">'.$row["ccall"].'</td>
-                        </tr>
-                    ';
-                    }else{
-                      echo'<tr>
-                            <td>'.$row["yearbudget"].'</td>
-                            <td>'.$row["mobilei"].'</td>
-                            <td><a href="#" onclick="stmgeto(\''.$row["rep"].'\')">'.$row["rep"].'</a></td>
-                            <td><a href="#" onclick="stmgeto(\''.$row["rep"].'\')">'.$row["accountname"].'</a></td>
-                            <td>'.$row["fund"].'</td>
-                            <td>'.formatMoney($row["compensated"], 2).'</td>
-                            <td>'.$row["ccall"].'</td>
-                          </tr>
-                      ';
-                      }
+            $billText = '';
+            if (!empty($row["stm_bill"])) {
+                $billText = $row["stm_bill"];
+                if (!empty($row["stm_billdate"])) {
+                    $billText .= '-' . $row["stm_billdate"];
+                }
+            } elseif (!empty($row["mobileo"]) && $row["mobileo"] !== '-') {
+                $billText = $row["mobileo"];
+            } elseif (!empty($row["mobilei"]) && $row["mobilei"] !== '-') {
+                $billText = $row["mobilei"];
             }
 
+            $is_billed = (!empty($billText));
+            $style = $is_billed ? 'style="color: green;"' : '';
+            $link_style = $is_billed ? 'style="color: green;"' : '';
+
+            echo '<tr>
+                    <td ' . $style . '>' . $row["yearbudget"] . '</td>
+                    <td ' . $style . '>' . ($is_billed ? $billText : '-') . '</td>
+                    <td><a ' . $link_style . ' href="#" onclick="stmgeto(\'' . $row["rep"] . '\', \'' . $row["accountcode"] . '\')">' . $row["rep"] . '</a></td>
+                    <td><a ' . $link_style . ' href="#" onclick="stmgeto(\'' . $row["rep"] . '\', \'' . $row["accountcode"] . '\')">' . $row["accountname"] . '</a></td>
+                    <td ' . $style . '>' . $row["fund"] . '</td>
+                    <td ' . $style . '>' . formatMoney($row["compensated"], 2) . '</td>
+                    <td ' . $style . '>' . $row["ccall"] . '</td>
+                  </tr>';
 
             $srcpt_money = $srcpt_money + cleanNum($row["compensated"]);
             $ccall = $ccall + cleanNum($row["ccall"]);
 
             $i++;
-            }
+          }
 
             echo'<tr style="background: #cecece;">
                   <td style="text-align:center;color: blue;font-weight: bold;" colspan="5">รวม</td>
@@ -3535,13 +3525,18 @@ if (isset($_POST['action2'])) {
 
           // ป้องกัน SQL Injection ก่อนนำไปใช้
           $stmgetovlookup = mysqli_real_escape_string($conn, $_POST['stmgetovlookup']);
+          $acc_filter = "";
+          if (isset($_POST['accountcode']) && !empty($_POST['accountcode'])) {
+              $post_acc = mysqli_real_escape_string($conn, trim($_POST['accountcode']));
+              $acc_filter = " AND stm.accountcode = '$post_acc' ";
+          }
 
-          // เพิ่ม o.bill AS billo และ i.bill AS billi ใน SELECT
-          $sql = "SELECT stm.yearbudget,stm.rep,o.vn,o.ptname,o.debit,o.follow_money AS follow_money_o,i.an,i.ptname as 'ptnamei',i.debit as 'debiti',i.follow_money AS follow_money_i,stm.compensated,(stm.compensated)-(o.debit) AS 'diff',(stm.compensated)-(i.debit) AS 'diffi',stm.accountname,stm.fund,o.vstdate,i.admdate,i.dchdate,stm.accountcode,i.mobile as 'mobilei',o.mobile as 'mobileo',o.cid as cido,i.cid as cidi, o.bill AS billo, i.bill AS billi
+          // เพิ่ม o.bill AS billo, i.bill AS billi, stm.bill, stm.billdate, stm.paidtype ใน SELECT
+          $sql = "SELECT stm.yearbudget,stm.rep,o.vn,o.ptname,COALESCE(stm.debit, o.debit) as debit,o.follow_money AS follow_money_o,i.an,i.ptname as 'ptnamei',i.debit as 'debiti',i.follow_money AS follow_money_i,stm.compensated,COALESCE(stm.diff, (stm.compensated)-(o.debit)) AS 'diff',(stm.compensated)-(i.debit) AS 'diffi',stm.accountname,stm.fund,o.vstdate,i.admdate,i.dchdate,stm.accountcode,i.mobile as 'mobilei',o.mobile as 'mobileo',stm.bill as stm_bill,stm.billdate as stm_billdate,stm.paidtype,o.cid as cido,i.cid as cidi, o.bill AS billo, i.bill AS billi
             FROM imr_tb_check_invoice stm
             LEFT JOIN  imr_tb_debtor_rights_opd o on o.vn=stm.vn
             LEFT JOIN  imr_tb_debtor_rights_ipd i on i.an=stm.vn
-            WHERE stm.rep = '$stmgetovlookup' AND (UPPER(TRIM(stm.fund)) = 'UCS' OR (stm.compensated != '0' AND stm.compensated != '0.0' AND stm.compensated != '0.00'))
+            WHERE stm.rep = '$stmgetovlookup' $acc_filter AND (UPPER(TRIM(stm.fund)) = 'UCS' OR (stm.compensated != '0' AND stm.compensated != '0.0' AND stm.compensated != '0.00'))
             ORDER BY diff desc ";
 
           $result = mysqli_query($conn, $sql);
@@ -3618,8 +3613,8 @@ if (isset($_POST['action2'])) {
             if($row["an"]==""){
                 $an=0;
 
-                // เช็คว่า OPD มีเลขที่ใบเสร็จ (bill) หรือยัง
-                if(!empty($row["billo"])) {
+                // เช็คว่า OPD มีเลขที่ใบเสร็จ (bill) หรือยัง (ยกเว้น ALREADY_BILLED_PARENT ซึ่งถูกล็อกความปลอดภัยไว้)
+                if(!empty($row["billo"]) && ($row["paidtype"] ?? '') !== 'ALREADY_BILLED_PARENT') {
                     $billed_patients[] = "OPD: " . $row["ptname"] . " (เลขที่ใบเสร็จ: " . $row["billo"] . ")";
                 }
 
@@ -3636,9 +3631,11 @@ if (isset($_POST['action2'])) {
                     $dup_badge_o = ' <span class="badge bg-danger" style="cursor:pointer; font-size: 10px; text-transform: capitalize; vertical-align: text-bottom;" onclick="viewDuplicateVisits(\''.$row["cido"].'\', \''.$row["vstdate"].'\')">'.$dup_opd_map[$dup_key_o].' visit</span>';
                 }
 
+                $disp_bill = (!empty($row["stm_bill"])) ? ($row["stm_bill"] . '-' . ($row["stm_billdate"] ?? '')) : $row["mobileo"];
+
                 echo'<tr>
                   <td style="color: #212121; text-align: center;">'.$i.'</td>
-                  <td style="color: #212121; text-align: center;">'.$row["mobileo"].'</td>
+                  <td style="color: #212121; text-align: center;">'.$disp_bill.'</td>
                   <td style="color: #212121; text-align: center;">'.$row["yearbudget"].'</td>
                   <td style="color: #212121; text-align: center;">'.$row["rep"].'</td>
                   <td style="color: #212121; text-align: center;">'.$row["vn"].'</td>
@@ -3662,10 +3659,19 @@ if (isset($_POST['action2'])) {
                   $billed_patients[] = "IPD: " . $row["ptnamei"] . " (เลขที่ใบเสร็จ: " . $row["billi"] . ")";
               }
 
+                $is_ipd_cr = ($row["accountcode"] === '1102050101.217' || strpos($row["accountname"], 'CR') !== false);
+                $row_debiti = $is_ipd_cr ? cleanNum($row["debit"]) : cleanNum($row["debiti"]);
+                $row_diffi = $is_ipd_cr ? cleanNum($row["diff"]) : cleanNum($row["diffi"]);
+
+                if (!$is_ipd_cr && isset($row["diff"]) && $row["diff"] !== '' && $row["diff"] !== null && !empty($row["debit"])) {
+                    $row_debiti = cleanNum($row["debit"]);
+                    $row_diffi = cleanNum($row["diff"]);
+                }
+
                 $debit_icon_i = '';
                 if (isset($row["follow_money_i"]) && $row["follow_money_i"] > 0) {
-                    $row["debiti"] = cleanNum($row["debiti"]) - cleanNum($row["follow_money_i"]);
-                    $row["diffi"] = cleanNum($row["compensated"]) - cleanNum($row["debiti"]);
+                    $row_debiti = cleanNum($row_debiti) - cleanNum($row["follow_money_i"]);
+                    $row_diffi = cleanNum($row["compensated"]) - cleanNum($row_debiti);
                     $debit_icon_i = ' <iconify-icon icon="fa6-solid:hand-holding-dollar" style="color: #f2a33c; font-size: 15px;" title="แบ่งจ่ายไปแล้ว ' . formatMoney($row["follow_money_i"], 2) . '"></iconify-icon>';
                 }
 
@@ -3675,9 +3681,11 @@ if (isset($_POST['action2'])) {
                     $dup_badge_i = ' <span class="badge bg-danger" style="cursor:pointer; font-size: 10px; text-transform: capitalize; vertical-align: text-bottom;" onclick="viewDuplicateVisits(\''.encrypt_data($row["cidi"]).'\', \''.$row["dchdate"].'\')">'.$dup_ipd_map[$dup_key_i].' visit</span>';
                 }
 
+                $mobile_display_i = !empty($row["stm_bill"]) ? ($row["stm_bill"] . (!empty($row["stm_billdate"]) ? '-' . $row["stm_billdate"] : '')) : $row["mobilei"];
+
                 echo'<tr>
                   <td style="color: #212121; text-align: center;">'.$i.'</td>
-                  <td style="color: #212121; text-align: center;">'.$row["mobilei"].'</td>
+                  <td style="color: #212121; text-align: center;">'.$mobile_display_i.'</td>
                   <td style="color: #212121; text-align: center;">'.$row["yearbudget"].'</td>
                   <td style="color: #212121; text-align: center;">'.$row["rep"].'</td>
                   <td style="color: #212121; text-align: center;">'.$row["an"].'</td>
@@ -3685,13 +3693,13 @@ if (isset($_POST['action2'])) {
                   <td style="color: #212121;">'.$row["ptnamei"].$dup_badge_i.'</td>
                   <td style="color: #212121;">'.$row["accountname"].'</td>
                   <td style="color: #212121; text-align: center;">'.$row["dchdate"].'</td>
-                  <td style="color: blue; text-align: right;">'.formatMoney($row["debiti"], 2).$debit_icon_i.'</td>
+                  <td style="color: blue; text-align: right;">'.formatMoney($row_debiti, 2).$debit_icon_i.'</td>
                   <td style="color: green; text-align: right;">'.formatMoney($row["compensated"], 2).'</td>
-                  <td style="color: #ff6d07; text-align: right;">'.formatMoney($row["diffi"], 2).'</td>
+                  <td style="color: #ff6d07; text-align: right;">'.formatMoney($row_diffi, 2).'</td>
                 </tr>';
 
-            $diffi = $diffi + cleanNum($row["diffi"]);
-            $debiti = $debiti + cleanNum($row["debiti"]);
+            $diffi = $diffi + cleanNum($row_diffi);
+            $debiti = $debiti + cleanNum($row_debiti);
 
             }
 
@@ -4038,23 +4046,28 @@ if (isset($_POST['ckdgetovlookup'])) {
 // --- ส่วนที่ 1: ดึงใบเสร็จเดิมมาแสดงใน Dropdown ---
 if (isset($_POST['action_get_old_receipt'])) {
     $rep = mysqli_real_escape_string($conn, $_POST['action_get_old_receipt']);
+    $accountcode = isset($_POST['accountcode']) ? mysqli_real_escape_string($conn, trim($_POST['accountcode'])) : '';
+    $acc_filter = !empty($accountcode) ? " AND stm.accountcode = '$accountcode' " : "";
 
-    // ดึงข้อมูล mobile (ที่เก็บเลขใบเสร็จ) ที่ไม่ว่าง และไม่ใช่ขีด
+    // ดึงข้อมูล mobile (ที่เก็บเลขใบเสร็จ) หรือ stm.bill
     $sql = "SELECT DISTINCT mobile FROM imr_tb_debtor_rights_opd
             JOIN imr_tb_check_invoice stm ON stm.vn = imr_tb_debtor_rights_opd.vn
-            WHERE stm.rep = '$rep' AND mobile IS NOT NULL AND mobile != '-' AND mobile != ''
+            WHERE stm.rep = '$rep' $acc_filter AND mobile IS NOT NULL AND mobile != '-' AND mobile != ''
             UNION
             SELECT DISTINCT mobile FROM imr_tb_debtor_rights_ipd
             JOIN imr_tb_check_invoice stm ON stm.vn = imr_tb_debtor_rights_ipd.an
-            WHERE stm.rep = '$rep' AND mobile IS NOT NULL AND mobile != '-' AND mobile != ''";
+            WHERE stm.rep = '$rep' $acc_filter AND mobile IS NOT NULL AND mobile != '-' AND mobile != ''
+            UNION
+            SELECT DISTINCT CONCAT(stm.bill, IF(stm.billdate != '', CONCAT('-', stm.billdate), '')) as mobile
+            FROM imr_tb_check_invoice stm
+            WHERE stm.rep = '$rep' $acc_filter AND stm.bill IS NOT NULL AND stm.bill != ''";
 
     $result = mysqli_query($conn, $sql);
 
     echo '<option value="">-- เป็นการบันทึกใหม่ (ไม่มีใบเสร็จเดิม) --</option>';
     while ($row = mysqli_fetch_assoc($result)) {
-    if (isset($row['cid'])) $row['cid'] = decrypt_data($row['cid']);
-    if (isset($row['tel'])) $row['tel'] = decrypt_data($row['tel']);
-        // แยกเอาแค่เลขใบเสร็จมาแสดง (สมมติ format คือ เลขที่-วันที่)
+        if (isset($row['cid'])) $row['cid'] = decrypt_data($row['cid']);
+        if (isset($row['tel'])) $row['tel'] = decrypt_data($row['tel']);
         $val = $row['mobile'];
         echo '<option value="'.$val.'">แก้ไขรายการ: '.$val.'</option>';
     }
@@ -4062,13 +4075,14 @@ if (isset($_POST['action_get_old_receipt'])) {
 }
 
 
-// --- ส่วนที่ 2: บันทึกข้อมูล (แก้ไขให้รองรับการ Edit) ---
+// --- ส่วนที่ 2: บันทึกข้อมูล (แก้ไขให้รองรับการ Edit และแยกผังแม่/ผังลูก) ---
 if (isset($_POST['reptact'])) {
 
     $reptact = mysqli_real_escape_string($conn, $_POST['reptact']);
     $payment = mysqli_real_escape_string($conn, $_POST['payment']);
     $paymentdate = mysqli_real_escape_string($conn, $_POST['paymentdate']);
     $old_payment = mysqli_real_escape_string($conn, $_POST['old_payment']); // รับค่าใบเสร็จเดิม
+    $accountcode_act = isset($_POST['accountcode_act']) ? mysqli_real_escape_string($conn, trim($_POST['accountcode_act'])) : '';
 
     $textpay = $payment . "-" . $paymentdate;
 
@@ -4082,12 +4096,17 @@ if (isset($_POST['reptact'])) {
         $where_condition = " AND (mobile = '-' OR mobile = '' OR mobile IS NULL) ";
     }
 
-    // ดึง VN/AN ที่เกี่ยวข้องกับ REP นี้
-    $sql = "SELECT o.vn, i.an
+    $acc_condition = "";
+    if (!empty($accountcode_act)) {
+        $acc_condition = " AND stm.accountcode = '$accountcode_act' ";
+    }
+
+    // ดึง VN/AN ที่เกี่ยวข้องกับ REP นี้ พร้อมสถานะการตัดหนี้
+    $sql = "SELECT stm.vn, stm.paidtype, stm.accountcode as stm_accountcode, o.accountcode as opd_accountcode, i.an, i.accountcode as ipd_accountcode
             FROM imr_tb_check_invoice stm
             LEFT JOIN imr_tb_debtor_rights_opd o ON o.vn = stm.vn
             LEFT JOIN imr_tb_debtor_rights_ipd i ON i.an = stm.vn
-            WHERE stm.rep = '$reptact'";
+            WHERE stm.rep = '$reptact' $acc_condition";
 
     $result = mysqli_query($conn, $sql);
     $success_count = 0;
@@ -4095,30 +4114,89 @@ if (isset($_POST['reptact'])) {
     if ($result && mysqli_num_rows($result) > 0) {
         $affected_rehab_targets = [];
         while ($row = mysqli_fetch_assoc($result)) {
-    if (isset($row['cid'])) $row['cid'] = decrypt_data($row['cid']);
-    if (isset($row['tel'])) $row['tel'] = decrypt_data($row['tel']);
-            $vn = $row["vn"];
-            $an = $row["an"];
+            if (isset($row['cid'])) $row['cid'] = decrypt_data($row['cid']);
+            if (isset($row['tel'])) $row['tel'] = decrypt_data($row['tel']);
+            $vn = $row["vn"] ?? '';
+            $an = $row["an"] ?? '';
+            $paidtype = $row["paidtype"] ?? '';
+            $stmAcc = $row["stm_accountcode"] ?? '';
+            $opdAcc = $row["opd_accountcode"] ?? '';
+            $ipdAcc = $row["ipd_accountcode"] ?? '';
 
             if ($vn != '') {
                 $affected_rehab_targets[] = $vn;
-                // อัพเดท OPD
-                $sql11 = "UPDATE imr_tb_debtor_rights_opd SET discount_money = 'appeal' WHERE vn='$vn' AND mobile <> '-'";
-                // บรรทัดนี้อาจต้องดู Logic พี่อีกทีว่า discount_money ต้องแก้ด้วยไหมเมื่อแก้ไขใบเสร็จ แต่ผมคงไว้ตามเดิมก่อน
 
-                $sql1 = "UPDATE imr_tb_debtor_rights_opd SET mobile = '$textpay' WHERE vn='$vn' $where_condition";
-                mysqli_query($conn, $sql1);
+                // 1. Financial Safety Lock: รายการที่ตัดในผังหลักไปแล้ว ห้ามตัดลูกหนี้ซ้ำใน imr_tb_debtor_rights_opd
+                if ($paidtype === 'ALREADY_BILLED_PARENT') {
+                    continue;
+                }
+
+                // 2. ตัดลูกหนี้กรณี CR (READY_CR หรือบัญชี 1102050101.216)
+                if ($paidtype === 'READY_CR' || strpos($stmAcc, '1102050101.216') !== false) {
+                    mysqli_query($conn, "UPDATE imr_tb_debtor_cr_breakdown 
+                                         SET bill = '$payment', billdate = '$paymentdate', settle_status = 'SETTLED' 
+                                         WHERE visit_type = 'OPD' AND vn = '$vn'");
+
+                    // ถ้าเป็นลูกหนี้ตรงของ 1102050101.216 ใน imr_tb_debtor_rights_opd หรือยอดคงเหลือทั่วไปหมดแล้ว
+                    $q_bd = mysqli_query($conn, "SELECT MAX(general_remain_amount) as max_remain FROM imr_tb_debtor_cr_breakdown WHERE visit_type = 'OPD' AND vn = '$vn'");
+                    $r_bd = ($q_bd && mysqli_num_rows($q_bd) > 0) ? mysqli_fetch_assoc($q_bd) : null;
+                    if (strpos($opdAcc, '1102050101.216') !== false || floatval($r_bd['max_remain'] ?? 0) <= 0.01) {
+                        mysqli_query($conn, "UPDATE imr_tb_debtor_rights_opd 
+                                             SET bill = '$payment', billdate = '$paymentdate', mobile = '$textpay' 
+                                             WHERE vn = '$vn' AND (accountcode LIKE '%1102050101.216%' OR debit <= 0)");
+                    }
+                } else {
+                    // 3. กรณี OPD ทั่วไป
+                    $sql11 = "UPDATE imr_tb_debtor_rights_opd SET discount_money = 'appeal' WHERE vn='$vn' AND mobile <> '-'";
+                    mysqli_query($conn, $sql11);
+
+                    $sql1 = "UPDATE imr_tb_debtor_rights_opd SET mobile = '$textpay' WHERE vn='$vn' $where_condition";
+                    mysqli_query($conn, $sql1);
+
+                    // ซิงค์ใบเสร็จไปยังผังลูก CR breakdown ของ OPD visit นี้ที่มีการชดเชยด้วย
+                    mysqli_query($conn, "UPDATE imr_tb_debtor_cr_breakdown 
+                                         SET bill = '$payment', billdate = '$paymentdate', settle_status = 'SETTLED' 
+                                         WHERE visit_type = 'OPD' AND vn = '$vn' AND compensated > 0");
+                }
             }
 
             if ($an != '') {
                 $affected_rehab_targets[] = $an;
-                // อัพเดท IPD
-                $sql22 = "UPDATE imr_tb_debtor_rights_ipd SET discount_money = 'appeal' WHERE an='$an' AND mobile <> '-'";
+                
+                // ตรวจสอบว่าเป็นรายการ IPD CR (.217) หรือไม่
+                if ($paidtype === 'READY_CR' || strpos($stmAcc, '1102050101.217') !== false || (!empty($accountcode_act) && strpos($accountcode_act, '1102050101.217') !== false)) {
+                    // 1. อัปเดตตาราง IPD CR Breakdown
+                    mysqli_query($conn, "UPDATE imr_tb_debtor_cr_breakdown 
+                                         SET bill = '$payment', billdate = '$paymentdate', settle_status = 'SETTLED' 
+                                         WHERE visit_type = 'IPD' AND vn = '$an'");
 
-                $sql2 = "UPDATE imr_tb_debtor_rights_ipd SET mobile = '$textpay' WHERE an='$an' $where_condition";
-                mysqli_query($conn, $sql2);
+                    // 2. ถ้ามีลูกหนี้ตรงใน imr_tb_debtor_rights_ipd ที่เป็น .217 ให้อัปเดต
+                    if (strpos($ipdAcc, '1102050101.217') !== false) {
+                        mysqli_query($conn, "UPDATE imr_tb_debtor_rights_ipd 
+                                             SET bill = '$payment', billdate = '$paymentdate', mobile = '$textpay' 
+                                             WHERE an = '$an' AND accountcode LIKE '%1102050101.217%'");
+                    }
+                } else {
+                    // กรณี IPD ผังแม่ / ทั่วไป: อัปเดตผังแม่ ไม่ตั้ง discount_money = 'appeal' ในการแนบปกติ
+                    $sql2 = "UPDATE imr_tb_debtor_rights_ipd SET mobile = '$textpay' WHERE an='$an' $where_condition";
+                    mysqli_query($conn, $sql2);
+
+                    // ซิงค์ใบเสร็จไปยังผังลูก CR breakdown ของ visit นี้ที่มีการชดเชยด้วย
+                    mysqli_query($conn, "UPDATE imr_tb_debtor_cr_breakdown 
+                                         SET bill = '$payment', billdate = '$paymentdate', settle_status = 'SETTLED' 
+                                         WHERE visit_type = 'IPD' AND vn = '$an' AND compensated > 0");
+                }
             }
         }
+
+        // อัพเดทเลขที่ใบเสร็จและวันที่ใน imr_tb_check_invoice สำหรับทุกรายการใน REP นี้ (เพราะใบเสร็จออกให้ทั้ง statement)
+        mysqli_query($conn, "UPDATE imr_tb_check_invoice SET bill = '$payment', billdate = '$paymentdate' WHERE rep = '$reptact'");
+
+        // ซิงค์ใบเสร็จเข้า imr_tb_debtor_cr_breakdown สำหรับทุก visit ใน statement REP นี้ที่มีการชดเชย
+        mysqli_query($conn, "UPDATE imr_tb_debtor_cr_breakdown b 
+                             JOIN imr_tb_check_invoice inv ON inv.vn = b.vn 
+                             SET b.bill = '$payment', b.billdate = '$paymentdate', b.settle_status = 'SETTLED' 
+                             WHERE inv.rep = '$reptact' AND b.compensated > 0");
 
         // Real-Time Plugin Hook: ซิงค์การตัดลูกหนี้เข้าตารางติดตามอุปกรณ์ทันที
         if (function_exists('rehab_hook_sync_vns') && !empty($affected_rehab_targets)) {
@@ -4627,6 +4705,77 @@ if(isset($_POST['actionipdlist'])){
             $sss_summary_ipd = get_sss_splitting_summary_for_month($conn, $conn2, $actionipdlist, 'IPD', $sss_config_ipd, $my_hospcode);
         }
 
+        // ดึงจำนวนเคสที่ออกใบเสร็จ/ชำระแล้วของแต่ละผังบัญชี เพื่อคำนวณลูกหนี้คงเหลือ (visitdiff)
+        // 🛑 รวบรวมเคสที่โอนสิทธิ์เต็มจำนวน (Full Transfer) เพื่อแยกไม่นับรวมในผังแม่ ป้องกันนับเคสซ้ำซ้อน
+        $full_tr_ans_ipd = [];
+        if ($cr_summary_ipd && !empty($cr_summary_ipd['cr_visits'])) {
+            foreach ($cr_summary_ipd['cr_visits'] as $v_an => $v_info) {
+                if (!empty($v_info['is_full_transfer'])) {
+                    $full_tr_ans_ipd[] = mysqli_real_escape_string($conn, $v_an);
+                }
+            }
+        }
+        if ($sss_summary_ipd && !empty($sss_summary_ipd['sss_visits'])) {
+            foreach ($sss_summary_ipd['sss_visits'] as $v_an => $v_info) {
+                if (!empty($v_info['is_full_transfer'])) {
+                    $full_tr_ans_ipd[] = mysqli_real_escape_string($conn, $v_an);
+                }
+            }
+        }
+        $exclude_full_tr_sql = !empty($full_tr_ans_ipd) ? " AND o.an NOT IN ('" . implode("','", $full_tr_ans_ipd) . "') " : "";
+
+        $billed_counts_ipd = [];
+        $q_billed_ipd = mysqli_query($conn, "
+            SELECT o.accountcode,
+                   COUNT(DISTINCT o.an) as billed_cnt
+            FROM imr_tb_debtor_rights_ipd o
+            LEFT JOIN imr_tb_check_invoice chk ON chk.vn = o.an AND (chk.accountcode = o.accountcode OR chk.accountcode IS NULL)
+            WHERE o.monthtxt = '$actionipdlist' $exclude_full_tr_sql
+              AND (
+                  (o.bill IS NOT NULL AND TRIM(o.bill) != '' AND TRIM(o.bill) != '-' AND TRIM(o.bill) != '0000/0000') 
+                  OR (o.mobile IS NOT NULL AND TRIM(o.mobile) REGEXP '^[0-9]{2,4}/[0-9]{2,4}-[0-9]{1,2}/[0-9]{1,2}/[0-9]{3,4}$' AND TRIM(o.mobile) NOT LIKE '0000/0000%')
+                  OR (chk.bill IS NOT NULL AND TRIM(chk.bill) != '' AND TRIM(chk.bill) != '-' AND TRIM(chk.bill) != '0000/0000')
+              )
+            GROUP BY o.accountcode
+        ");
+        if ($q_billed_ipd) {
+            while ($bc = mysqli_fetch_assoc($q_billed_ipd)) {
+                $billed_counts_ipd[$bc['accountcode']] = intval($bc['billed_cnt']);
+            }
+        }
+
+        $billed_217_cnt = 0;
+        if ($cr_summary_ipd && !empty($cr_summary_ipd['cr_visits'])) {
+            $cr_ans = array_keys($cr_summary_ipd['cr_visits']);
+            $safe_cr_ans = "'" . implode("','", array_map(function($a) use ($conn) { return mysqli_real_escape_string($conn, $a); }, $cr_ans)) . "'";
+            $q_b217 = mysqli_query($conn, "
+                SELECT COUNT(DISTINCT vn) as cnt FROM (
+                    SELECT vn FROM imr_tb_debtor_cr_breakdown WHERE visit_type = 'IPD' AND vn IN ($safe_cr_ans) AND bill IS NOT NULL AND TRIM(bill) != '' AND TRIM(bill) != '-' AND TRIM(bill) != '0000/0000'
+                    UNION
+                    SELECT vn FROM imr_tb_check_invoice WHERE accountcode = '1102050101.217' AND vn IN ($safe_cr_ans) AND bill IS NOT NULL AND TRIM(bill) != '' AND TRIM(bill) != '-' AND TRIM(bill) != '0000/0000'
+                ) as u
+            ");
+            if ($q_b217 && ($rb217 = mysqli_fetch_assoc($q_b217))) {
+                $billed_217_cnt = intval($rb217['cnt']);
+            }
+        }
+
+        $billed_310_cnt = 0;
+        if ($sss_summary_ipd && !empty($sss_summary_ipd['sss_visits'])) {
+            $sss_ans = array_keys($sss_summary_ipd['sss_visits']);
+            $safe_sss_ans = "'" . implode("','", array_map(function($a) use ($conn) { return mysqli_real_escape_string($conn, $a); }, $sss_ans)) . "'";
+            $q_b310 = mysqli_query($conn, "
+                SELECT COUNT(DISTINCT vn) as cnt FROM (
+                    SELECT vn FROM imr_tb_debtor_sss_breakdown WHERE visit_type = 'IPD' AND vn IN ($safe_sss_ans) AND bill IS NOT NULL AND TRIM(bill) != '' AND TRIM(bill) != '-' AND TRIM(bill) != '0000/0000'
+                    UNION
+                    SELECT vn FROM imr_tb_check_invoice WHERE accountcode = '1102050101.310' AND vn IN ($safe_sss_ans) AND bill IS NOT NULL AND TRIM(bill) != '' AND TRIM(bill) != '-' AND TRIM(bill) != '0000/0000'
+                ) as u
+            ");
+            if ($q_b310 && ($rb310 = mysqli_fetch_assoc($q_b310))) {
+                $billed_310_cnt = intval($rb310['cnt']);
+            }
+        }
+
         $summary_rows_ipd_list = [];
         $rendered_217 = false;
         $rendered_310 = false;
@@ -4646,13 +4795,26 @@ if(isset($_POST['actionipdlist'])){
                     if (isset($tr_ipd['comp_out'])) {
                         $row["follow_money"] = max(0, cleanNum($row["follow_money"]) - $tr_ipd['comp_out']);
                     }
+                    if (!empty($tr_ipd['full_transfer_cases']) && !empty($cr_summary_ipd['cr_visits'])) {
+                        $full_tr_comp = 0;
+                        foreach ($cr_summary_ipd['cr_visits'] as $v_an => $v_info) {
+                            if (!empty($v_info['is_full_transfer']) && ($v_info['origin_accountcode'] ?? '1102050101.202') === $row['accountcode']) {
+                                $safe_v_an = mysqli_real_escape_string($conn, $v_an);
+                                $q_ft = mysqli_query($conn, "SELECT SUM(compensated) as comp FROM imr_tb_check_invoice WHERE vn = '$safe_v_an' AND (accountcode = '{$row['accountcode']}' OR accountcode IS NULL)");
+                                if ($q_ft && ($r_ft = mysqli_fetch_assoc($q_ft))) {
+                                    $full_tr_comp += cleanNum($r_ft['comp']);
+                                }
+                            }
+                        }
+                        $row["follow_money"] = max(0, cleanNum($row["follow_money"]) - $full_tr_comp);
+                    }
                 } elseif ($row['accountcode'] === '1102050101.217') {
                     $rendered_217 = true;
                     $row["incometotall"] = cleanNum($cr_summary_ipd['cr_received_total']);
                     $row["incomeall"] = cleanNum($cr_summary_ipd['cr_received_total']);
                     $row["incomediff"] = 0.0;
                     $row["visitall"] = count($cr_summary_ipd['cr_visits']);
-                    $row["visitdiff"] = count($cr_summary_ipd['cr_visits']);
+                    $row["visitdiff"] = max(0, count($cr_summary_ipd['cr_visits']) - $billed_217_cnt);
                     if (isset($cr_summary_ipd['cr_received_comp'])) {
                         $row["follow_money"] = $cr_summary_ipd['cr_received_comp'];
                     }
@@ -4670,17 +4832,36 @@ if(isset($_POST['actionipdlist'])){
                     if (isset($tr_sss_ipd['comp_out'])) {
                         $row["follow_money"] = max(0, cleanNum($row["follow_money"]) - $tr_sss_ipd['comp_out']);
                     }
+                    if (!empty($tr_sss_ipd['full_transfer_cases']) && !empty($sss_summary_ipd['sss_visits'])) {
+                        $full_tr_sss_comp = 0;
+                        foreach ($sss_summary_ipd['sss_visits'] as $v_an => $v_info) {
+                            if (!empty($v_info['is_full_transfer']) && ($v_info['origin_accountcode'] ?? '1102050101.302') === $row['accountcode']) {
+                                $safe_v_an = mysqli_real_escape_string($conn, $v_an);
+                                $q_ft_s = mysqli_query($conn, "SELECT SUM(compensated) as comp FROM imr_tb_check_invoice WHERE vn = '$safe_v_an' AND (accountcode = '{$row['accountcode']}' OR accountcode IS NULL)");
+                                if ($q_ft_s && ($r_ft_s = mysqli_fetch_assoc($q_ft_s))) {
+                                    $full_tr_sss_comp += cleanNum($r_ft_s['comp']);
+                                }
+                            }
+                        }
+                        $row["follow_money"] = max(0, cleanNum($row["follow_money"]) - $full_tr_sss_comp);
+                    }
                 } elseif ($row['accountcode'] === '1102050101.310') {
                     $rendered_310 = true;
                     $row["incometotall"] = cleanNum($row["incometotall"]) + cleanNum($sss_summary_ipd['sss_received_total']);
                     $row["incomeall"] = cleanNum($row["incomeall"]) + cleanNum($sss_summary_ipd['sss_received_total']);
                     $row["incomediff"] = 0.0;
                     $row["visitall"] = count($sss_summary_ipd['sss_visits']);
-                    $row["visitdiff"] = count($sss_summary_ipd['sss_visits']);
+                    $row["visitdiff"] = max(0, count($sss_summary_ipd['sss_visits']) - $billed_310_cnt);
                     if (isset($sss_summary_ipd['sss_received_comp'])) {
                         $row["follow_money"] = cleanNum($row["follow_money"]) + cleanNum($sss_summary_ipd['sss_received_comp']);
                     }
                 }
+            }
+
+            // คำนวณลูกหนี้คงเหลือ (visitdiff) ให้หักจำนวนเคสที่ออกใบเสร็จ/ชำระแล้ว
+            if ($row['accountcode'] !== '1102050101.217' && $row['accountcode'] !== '1102050101.310') {
+                $billed_cnt = isset($billed_counts_ipd[$row['accountcode']]) ? $billed_counts_ipd[$row['accountcode']] : 0;
+                $row["visitdiff"] = max(0, intval($row["visitall"]) - $billed_cnt);
             }
 
             $row["totaldiff"] = cleanNum($row["incometotall"]) - cleanNum($row["follow_money"]);
@@ -4705,7 +4886,7 @@ if(isset($_POST['actionipdlist'])){
                 'accountcode' => $acc217,
                 'accountname' => $accname217,
                 'visitall'    => $cnt217,
-                'visitdiff'   => $cnt217,
+                'visitdiff'   => max(0, $cnt217 - $billed_217_cnt),
                 'incomeall'   => $tot217,
                 'incomediff'  => 0.0,
                 'incometotall'=> $tot217,
@@ -4727,7 +4908,7 @@ if(isset($_POST['actionipdlist'])){
                 'accountcode' => $acc310,
                 'accountname' => $accname310,
                 'visitall'    => $cnt310,
-                'visitdiff'   => $cnt310,
+                'visitdiff'   => max(0, $cnt310 - $billed_310_cnt),
                 'incomeall'   => $tot310,
                 'incomediff'  => 0.0,
                 'incometotall'=> $tot310,
@@ -5053,6 +5234,76 @@ if(isset($_POST['actionopdlistonly'])){
                     $v = $bd['vn'];
                     if (!isset($sss_bd_map[$v]) || (!empty($bd['bill']) && empty($sss_bd_map[$v]['bill']))) {
                         $sss_bd_map[$v] = $bd;
+                    }
+                }
+            }
+            $cr_stm_map = [];
+            $q_cr_stm_opd = mysqli_query($conn, "SELECT vn, rep, bill, billdate, compensated FROM imr_tb_check_invoice WHERE accountcode = '1102050101.216' AND vn IN ($safe_det_vns) ORDER BY CASE WHEN bill IS NOT NULL AND TRIM(bill) != '' AND TRIM(bill) != '-' THEN 1 ELSE 2 END ASC, CASE WHEN compensated IS NOT NULL AND compensated > 0 THEN 1 ELSE 2 END ASC, id DESC");
+            if ($q_cr_stm_opd) {
+                while ($st = mysqli_fetch_assoc($q_cr_stm_opd)) {
+                    $v = $st['vn'];
+                    if (!isset($cr_stm_map[$v]) || (!empty($st['bill']) && empty($cr_stm_map[$v]['bill']))) {
+                        $cr_stm_map[$v] = $st;
+                    }
+                }
+            }
+            $sss_stm_map = [];
+            $q_sss_stm_opd = mysqli_query($conn, "SELECT vn, rep, bill, billdate, compensated FROM imr_tb_check_invoice WHERE accountcode = '1102050101.309' AND vn IN ($safe_det_vns) ORDER BY CASE WHEN bill IS NOT NULL AND TRIM(bill) != '' AND TRIM(bill) != '-' THEN 1 ELSE 2 END ASC, CASE WHEN compensated IS NOT NULL AND compensated > 0 THEN 1 ELSE 2 END ASC, id DESC");
+            if ($q_sss_stm_opd) {
+                while ($st = mysqli_fetch_assoc($q_sss_stm_opd)) {
+                    $v = $st['vn'];
+                    if (!isset($sss_stm_map[$v]) || (!empty($st['bill']) && empty($sss_stm_map[$v]['bill']))) {
+                        $sss_stm_map[$v] = $st;
+                    }
+                }
+            }
+            // Fallback: ดึงใบเสร็จและ REP จากรายการอื่นใน imr_tb_check_invoice ของ vn เดียวกัน หรือจาก statement REP เดียวกัน
+            $q_vn_bills_o = mysqli_query($conn, "SELECT vn, rep, bill, billdate, compensated FROM imr_tb_check_invoice WHERE vn IN ($safe_det_vns) AND bill IS NOT NULL AND TRIM(bill) != '' AND TRIM(bill) != '-' ORDER BY id DESC");
+            if ($q_vn_bills_o) {
+                while ($vb = mysqli_fetch_assoc($q_vn_bills_o)) {
+                    $v = $vb['vn'];
+                    if (isset($cr_stm_map[$v])) {
+                        if (empty($cr_stm_map[$v]['bill']) || $cr_stm_map[$v]['bill'] === '-') {
+                            $cr_stm_map[$v]['bill'] = $vb['bill'];
+                            $cr_stm_map[$v]['billdate'] = $vb['billdate'];
+                        }
+                        if (empty($cr_stm_map[$v]['rep'])) {
+                            $cr_stm_map[$v]['rep'] = $vb['rep'];
+                        }
+                    }
+                    if (isset($sss_stm_map[$v])) {
+                        if (empty($sss_stm_map[$v]['bill']) || $sss_stm_map[$v]['bill'] === '-') {
+                            $sss_stm_map[$v]['bill'] = $vb['bill'];
+                            $sss_stm_map[$v]['billdate'] = $vb['billdate'];
+                        }
+                        if (empty($sss_stm_map[$v]['rep'])) {
+                            $sss_stm_map[$v]['rep'] = $vb['rep'];
+                        }
+                    }
+                }
+            }
+
+            // Pre-query REP numbers across tables for all VNs in safe_det_vns
+            $all_rep_map_opd = [];
+            $q_all_reps_o = mysqli_query($conn, "SELECT vn, MAX(rep) as rep FROM imr_tb_check_invoice WHERE vn IN ($safe_det_vns) AND rep IS NOT NULL AND TRIM(rep) != '' GROUP BY vn");
+            if ($q_all_reps_o) {
+                while ($ar = mysqli_fetch_assoc($q_all_reps_o)) {
+                    $all_rep_map_opd[$ar['vn']] = trim($ar['rep']);
+                }
+            }
+            $q_ckd_reps_o = mysqli_query($conn, "SELECT vn, MAX(rep) as rep FROM imr_tb_seamless_dckd WHERE vn IN ($safe_det_vns) AND rep IS NOT NULL AND TRIM(rep) != '' GROUP BY vn");
+            if ($q_ckd_reps_o) {
+                while ($cr = mysqli_fetch_assoc($q_ckd_reps_o)) {
+                    if (empty($all_rep_map_opd[$cr['vn']])) {
+                        $all_rep_map_opd[$cr['vn']] = trim($cr['rep']);
+                    }
+                }
+            }
+            $q_ofc_reps_o = mysqli_query($conn, "SELECT vn, MAX(stm_doc) as rep FROM imr_tb_seamless_dckd_ofc WHERE vn IN ($safe_det_vns) AND stm_doc IS NOT NULL AND TRIM(stm_doc) != '' GROUP BY vn");
+            if ($q_ofc_reps_o) {
+                while ($or = mysqli_fetch_assoc($q_ofc_reps_o)) {
+                    if (empty($all_rep_map_opd[$or['vn']])) {
+                        $all_rep_map_opd[$or['vn']] = trim($or['stm_doc']);
                     }
                 }
             }
@@ -5449,10 +5700,110 @@ if(isset($_POST['actionopdlistonly'])){
                 }
             }
 
+            // 🌟 คำนวณยอดเงินชดเชยและดึงใบเสร็จแยกตามกลุ่มย่อย CR (OPD)
+            $cr_subgroup_comps_o = [];
+            $child_cr_total_comp_o = 0.0;
+            if (isset($cr_bd_map[$vn]) && !empty($cr_bd_map[$vn]['compensated'])) {
+                $child_cr_total_comp_o = floatval(cleanNum($cr_bd_map[$vn]['compensated']));
+            } elseif (isset($cr_stm_map[$vn]) && !empty($cr_stm_map[$vn]['compensated'])) {
+                $child_cr_total_comp_o = floatval(cleanNum($cr_stm_map[$vn]['compensated']));
+            } elseif ($is_target_216) {
+                $child_cr_total_comp_o = floatval(cleanNum($row['follow_money']));
+            }
+
+            if (!empty($cr_types)) {
+                $exact_matched_type_o = null;
+                foreach ($cr_types as $ct) {
+                    $sg_amt = isset($cr_subgroup_amounts[$ct]) ? floatval($cr_subgroup_amounts[$ct]) : 0.0;
+                    if ($child_cr_total_comp_o > 0 && abs($sg_amt - $child_cr_total_comp_o) < 0.01) {
+                        $exact_matched_type_o = $ct;
+                        break;
+                    }
+                }
+                if ($exact_matched_type_o !== null) {
+                    foreach ($cr_types as $ct) {
+                        $cr_subgroup_comps_o[$ct] = ($ct === $exact_matched_type_o) ? $child_cr_total_comp_o : 0.0;
+                    }
+                } else {
+                    $allocated_comp_so_far_o = 0.0;
+                    foreach ($cr_types as $ct) {
+                        $sg_amt = isset($cr_subgroup_amounts[$ct]) ? floatval($cr_subgroup_amounts[$ct]) : 0.0;
+                        if (count($cr_types) === 1) {
+                            $c_comp = min($child_cr_total_comp_o, $sg_amt);
+                        } else {
+                            $remain_comp = max(0.0, $child_cr_total_comp_o - $allocated_comp_so_far_o);
+                            $c_comp = min($remain_comp, $sg_amt);
+                        }
+                        $cr_subgroup_comps_o[$ct] = $c_comp;
+                        $allocated_comp_so_far_o += $c_comp;
+                    }
+                }
+            }
+
+            // ใบเสร็จและวันที่ของผังลูก CR (OPD)
+            $child_cr_bill_o = '';
+            $child_cr_billdate_o = '';
+            $child_cr_rep_o = '';
+            if (isset($cr_bd_map[$vn])) {
+                $child_cr_bill_o = trim($cr_bd_map[$vn]['bill'] ?? '');
+                $child_cr_billdate_o = trim($cr_bd_map[$vn]['billdate'] ?? '');
+            }
+            if (empty($child_cr_bill_o) || $child_cr_bill_o === '-' || $child_cr_bill_o === '0000/0000') {
+                if (isset($cr_stm_map[$vn])) {
+                    $child_cr_bill_o = trim($cr_stm_map[$vn]['bill'] ?? '');
+                    $child_cr_billdate_o = trim($cr_stm_map[$vn]['billdate'] ?? '');
+                    $child_cr_rep_o = trim($cr_stm_map[$vn]['rep'] ?? '');
+                }
+            }
+            if ($child_cr_bill_o === '-' || $child_cr_bill_o === '0000/0000') {
+                $child_cr_bill_o = '';
+                $child_cr_billdate_o = '';
+            }
+
+            // SSS subgroup comps and bill (OPD)
+            $sss_subgroup_comps_o = [];
+            $child_sss_total_comp_o = 0.0;
+            if (isset($sss_bd_map[$vn]) && !empty($sss_bd_map[$vn]['compensated'])) {
+                $child_sss_total_comp_o = floatval(cleanNum($sss_bd_map[$vn]['compensated']));
+            } elseif (isset($sss_stm_map[$vn]) && !empty($sss_stm_map[$vn]['compensated'])) {
+                $child_sss_total_comp_o = floatval(cleanNum($sss_stm_map[$vn]['compensated']));
+            } elseif ($is_target_309) {
+                $child_sss_total_comp_o = floatval(cleanNum($row['follow_money']));
+            }
+            if (!empty($sss_types)) {
+                foreach ($sss_types as $st) {
+                    $sg_amt_so = isset($sss_subgroup_amounts[$st]) ? floatval($sss_subgroup_amounts[$st]) : 0.0;
+                    $sss_subgroup_comps_o[$st] = min($child_sss_total_comp_o, $sg_amt_so);
+                }
+            }
+            $child_sss_bill_o = trim($sss_bd_map[$vn]['bill'] ?? ($sss_stm_map[$vn]['bill'] ?? ''));
+            $child_sss_billdate_o = trim($sss_bd_map[$vn]['billdate'] ?? ($sss_stm_map[$vn]['billdate'] ?? ''));
+            $child_sss_rep_o = trim($sss_stm_map[$vn]['rep'] ?? '');
+            if ($child_sss_bill_o === '-' || $child_sss_bill_o === '0000/0000') {
+                $child_sss_bill_o = '';
+                $child_sss_billdate_o = '';
+            }
+
+            $child_bill_final_o = !empty($child_cr_bill_o) ? $child_cr_bill_o : $child_sss_bill_o;
+            $child_billdate_final_o = !empty($child_cr_billdate_o) ? $child_cr_billdate_o : $child_sss_billdate_o;
+
+            if ($is_target_216) {
+                $child_rep_final_o = (!empty($child_cr_rep_o) && (!empty($cr_stm_map[$vn]['rep']) || $child_cr_total_comp_o > 0)) ? $child_cr_rep_o : '';
+                $rep_show_o = $child_rep_final_o;
+            } elseif ($is_target_309) {
+                $child_rep_final_o = (!empty($child_sss_rep_o) && (!empty($sss_stm_map[$vn]['rep']) || $child_sss_total_comp_o > 0)) ? $child_sss_rep_o : '';
+                $rep_show_o = $child_rep_final_o;
+            } else {
+                $child_rep_final_o = !empty($child_cr_rep_o) ? $child_cr_rep_o : (!empty($child_sss_rep_o) ? $child_sss_rep_o : ($all_rep_map_opd[$vn] ?? ''));
+                $rep_show_o = !empty($child_rep_final_o) ? $child_rep_final_o : (!empty($row['rep']) ? $row['rep'] : ($all_rep_map_opd[$vn] ?? ''));
+            }
+
             $all_subgroup_amounts = array_merge($cr_subgroup_amounts, $sss_subgroup_amounts);
             $amounts_json = htmlspecialchars(json_encode($all_subgroup_amounts, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
+            $all_subgroup_comps_o = array_merge($cr_subgroup_comps_o, $sss_subgroup_comps_o);
+            $comps_json_o = htmlspecialchars(json_encode($all_subgroup_comps_o, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
 
-            echo '  <tr class="main-patient-row" data-cr-type="' . htmlspecialchars($cr_type_str) . '" data-cr-amounts="' . $amounts_json . '" data-full-debit="' . floatval(cleanNum($row['debit'])) . '" data-full-income="' . floatval(cleanNum($row['income'])) . '" '.$row_color.'>
+            echo '  <tr class="main-patient-row" data-cr-type="' . htmlspecialchars($cr_type_str) . '" data-cr-amounts="' . $amounts_json . '" data-cr-comps="' . $comps_json_o . '" data-cr-bill="' . htmlspecialchars($child_bill_final_o, ENT_QUOTES, 'UTF-8') . '" data-cr-billdate="' . htmlspecialchars($child_billdate_final_o, ENT_QUOTES, 'UTF-8') . '" data-cr-rep="' . htmlspecialchars($child_rep_final_o, ENT_QUOTES, 'UTF-8') . '" data-full-debit="' . floatval(cleanNum($row['debit'])) . '" data-full-income="' . floatval(cleanNum($row['income'])) . '" '.$row_color.'>
                       <td style="text-align: center;"><input type="checkbox" name="select[]" value="'.$row["vn"].'" style=" width: 20px; height: 20px;"></td>';
 
             // =================================================================
@@ -5523,7 +5874,7 @@ if(isset($_POST['actionopdlistonly'])){
                         <td style="text-align: center;padding: 0px;background: #fff5e7;" contenteditable data-data1="'.$row["vn"].'" >'.formatMoney($row["follow_money"], 2).'</td>
                         <td class="mask-bill" style="text-align: center;'.$bg_color_main.'" contenteditable data-data2="'.$row["vn"].'" >'.$show_bill_main.'</td>
                         <td class="mask-date" style="text-align: center;'.$bg_color_main.'" contenteditable data-data3="'.$row["vn"].'" >'.$show_date_main.'</td>
-                        <td style="text-align: center;padding: 0px;background: #fff;" ></td>
+                        <td style="text-align: center;padding: 0px;background: #fff;" >'.$rep_show_o.'</td>
                         <td style="text-align: center;padding: 0px;background: #fff;" >'.$row["hn"].'</td>
                     </tr>';
 
@@ -5641,7 +5992,7 @@ if(isset($_POST['actionopdlistonly'])){
                             <td style="text-align: center;padding: 0px;'.$c3_bg.'" contenteditable data-data1="'.$row["vn"].'" >'.formatMoney($row["follow_money"], 2).'</td>
                             <td class="mask-bill" style="text-align: center;'.$c3_bg.'" contenteditable data-data2="'.$row["vn"].'" >'.$c3_bill.'</td>
                             <td class="mask-date" style="text-align: center;'.$c3_bg.'" contenteditable data-data3="'.$row["vn"].'" >'.$c3_billdate.'</td>
-                            <td style="text-align: center;padding: 0px;"> </td>
+                            <td style="text-align: center;padding: 0px;background: #fff;" >'.$rep_show_o.'</td>
                             <td style="text-align: center;padding: 0px;background: #fff;" >'.$row["hn"].'</td>
                         </tr>';
                 }
@@ -5959,6 +6310,79 @@ if(isset($_POST['actionipdlistonly'])){
                 }
             }
         }
+
+        // ดึงใบเสร็จและเงินชดเชยจาก imr_tb_check_invoice สำหรับผังลูก .217 และ .310
+        $cr_stm_map_ipd = [];
+        $q_cr_stm = mysqli_query($conn, "SELECT vn, rep, bill, billdate, compensated, ae, inst FROM imr_tb_check_invoice WHERE accountcode = '1102050101.217' AND vn IN ($safe_det_ans) ORDER BY CASE WHEN bill IS NOT NULL AND TRIM(bill) != '' AND TRIM(bill) != '-' THEN 1 ELSE 2 END ASC, CASE WHEN compensated IS NOT NULL AND compensated > 0 THEN 1 ELSE 2 END ASC, id DESC");
+        if ($q_cr_stm) {
+            while ($st = mysqli_fetch_assoc($q_cr_stm)) {
+                $v = $st['vn'];
+                if (!isset($cr_stm_map_ipd[$v]) || (!empty($st['bill']) && empty($cr_stm_map_ipd[$v]['bill']))) {
+                    $cr_stm_map_ipd[$v] = $st;
+                }
+            }
+        }
+        $sss_stm_map_ipd = [];
+        $q_sss_stm = mysqli_query($conn, "SELECT vn, rep, bill, billdate, compensated FROM imr_tb_check_invoice WHERE accountcode = '1102050101.310' AND vn IN ($safe_det_ans) ORDER BY CASE WHEN bill IS NOT NULL AND TRIM(bill) != '' AND TRIM(bill) != '-' THEN 1 ELSE 2 END ASC, CASE WHEN compensated IS NOT NULL AND compensated > 0 THEN 1 ELSE 2 END ASC, id DESC");
+        if ($q_sss_stm) {
+            while ($st = mysqli_fetch_assoc($q_sss_stm)) {
+                $v = $st['vn'];
+                if (!isset($sss_stm_map_ipd[$v]) || (!empty($st['bill']) && empty($sss_stm_map_ipd[$v]['bill']))) {
+                    $sss_stm_map_ipd[$v] = $st;
+                }
+            }
+        }
+
+        // Fallback: ดึงใบเสร็จและ REP จากรายการอื่นใน imr_tb_check_invoice ของ vn เดียวกัน หรือจาก statement REP เดียวกัน
+        $q_vn_bills_i = mysqli_query($conn, "SELECT vn, rep, bill, billdate, compensated FROM imr_tb_check_invoice WHERE vn IN ($safe_det_ans) AND bill IS NOT NULL AND TRIM(bill) != '' AND TRIM(bill) != '-' ORDER BY id DESC");
+        if ($q_vn_bills_i) {
+            while ($vb = mysqli_fetch_assoc($q_vn_bills_i)) {
+                $v = $vb['vn'];
+                if (isset($cr_stm_map_ipd[$v])) {
+                    if (empty($cr_stm_map_ipd[$v]['bill']) || $cr_stm_map_ipd[$v]['bill'] === '-') {
+                        $cr_stm_map_ipd[$v]['bill'] = $vb['bill'];
+                        $cr_stm_map_ipd[$v]['billdate'] = $vb['billdate'];
+                    }
+                    if (empty($cr_stm_map_ipd[$v]['rep'])) {
+                        $cr_stm_map_ipd[$v]['rep'] = $vb['rep'];
+                    }
+                }
+                if (isset($sss_stm_map_ipd[$v])) {
+                    if (empty($sss_stm_map_ipd[$v]['bill']) || $sss_stm_map_ipd[$v]['bill'] === '-') {
+                        $sss_stm_map_ipd[$v]['bill'] = $vb['bill'];
+                        $sss_stm_map_ipd[$v]['billdate'] = $vb['billdate'];
+                    }
+                    if (empty($sss_stm_map_ipd[$v]['rep'])) {
+                        $sss_stm_map_ipd[$v]['rep'] = $vb['rep'];
+                    }
+                }
+            }
+        }
+
+        // Pre-query REP numbers across tables for all ANs in safe_det_ans
+        $all_rep_map_ipd = [];
+        $q_all_reps_i = mysqli_query($conn, "SELECT vn, MAX(rep) as rep FROM imr_tb_check_invoice WHERE vn IN ($safe_det_ans) AND rep IS NOT NULL AND TRIM(rep) != '' GROUP BY vn");
+        if ($q_all_reps_i) {
+            while ($ar = mysqli_fetch_assoc($q_all_reps_i)) {
+                $all_rep_map_ipd[$ar['vn']] = trim($ar['rep']);
+            }
+        }
+        $q_ckd_reps_i = mysqli_query($conn, "SELECT vn, MAX(rep) as rep FROM imr_tb_seamless_dckd WHERE vn IN ($safe_det_ans) AND rep IS NOT NULL AND TRIM(rep) != '' GROUP BY vn");
+        if ($q_ckd_reps_i) {
+            while ($cr = mysqli_fetch_assoc($q_ckd_reps_i)) {
+                if (empty($all_rep_map_ipd[$cr['vn']])) {
+                    $all_rep_map_ipd[$cr['vn']] = trim($cr['rep']);
+                }
+            }
+        }
+        $q_ofc_reps_i = mysqli_query($conn, "SELECT vn, MAX(stm_doc) as rep FROM imr_tb_seamless_dckd_ofc WHERE vn IN ($safe_det_ans) AND stm_doc IS NOT NULL AND TRIM(stm_doc) != '' GROUP BY vn");
+        if ($q_ofc_reps_i) {
+            while ($or = mysqli_fetch_assoc($q_ofc_reps_i)) {
+                if (empty($all_rep_map_ipd[$or['vn']])) {
+                    $all_rep_map_ipd[$or['vn']] = trim($or['stm_doc']);
+                }
+            }
+        }
     }
 
     $all_display_rows_ipd = [];
@@ -5984,10 +6408,24 @@ if(isset($_POST['actionipdlistonly'])){
                     $row['follow_money'] = cleanNum($cr_bd_map_ipd[$an]['compensated']);
                     $row['bill'] = $cr_bd_map_ipd[$an]['bill'];
                     $row['billdate'] = $cr_bd_map_ipd[$an]['billdate'];
+                    $row['mobile'] = $cr_bd_map_ipd[$an]['bill'];
                 } else {
                     $row['cr_types'] = isset($cr_map_ipd[$an]['cr_types']) ? $cr_map_ipd[$an]['cr_types'] : [];
                     $row['items'] = isset($cr_map_ipd[$an]['items']) ? $cr_map_ipd[$an]['items'] : [];
-                    $row['follow_money'] = min(cleanNum($row['follow_money']), floatval($vinfo['cr_amount']));
+                    // เคสโอนเข้าผังลูก (1102050101.217): ต้องตัดฝั่งแม่ก่อนเสมอ ฝั่งลูกจะมี STM มาตัดอีกที
+                    $row['follow_money'] = 0.0;
+                    $row['bill'] = '';
+                    $row['billdate'] = '';
+                    $row['mobile'] = '';
+                }
+                // Fallback check from imr_tb_check_invoice for .217 if bill is empty
+                if ((empty($row['bill']) || $row['bill'] === '-') && isset($cr_stm_map_ipd[$an])) {
+                    $row['bill'] = $cr_stm_map_ipd[$an]['bill'];
+                    $row['billdate'] = $cr_stm_map_ipd[$an]['billdate'];
+                    $row['mobile'] = $cr_stm_map_ipd[$an]['bill'];
+                    if (empty($row['follow_money']) && !empty($cr_stm_map_ipd[$an]['compensated'])) {
+                        $row['follow_money'] = cleanNum($cr_stm_map_ipd[$an]['compensated']);
+                    }
                 }
             } else {
                 $row['cr_origin_acc'] = '1102050101.217';
@@ -6000,6 +6438,15 @@ if(isset($_POST['actionipdlistonly'])){
                 } else {
                     $row['cr_types'] = isset($cr_map_ipd[$an]['cr_types']) ? $cr_map_ipd[$an]['cr_types'] : [];
                     $row['items'] = isset($cr_map_ipd[$an]['items']) ? $cr_map_ipd[$an]['items'] : [];
+                }
+                // Fallback check from imr_tb_check_invoice for .217 if bill is empty
+                if ((empty($row['bill']) || $row['bill'] === '-') && isset($cr_stm_map_ipd[$an])) {
+                    $row['bill'] = $cr_stm_map_ipd[$an]['bill'];
+                    $row['billdate'] = $cr_stm_map_ipd[$an]['billdate'];
+                    $row['mobile'] = $cr_stm_map_ipd[$an]['bill'];
+                    if (empty($row['follow_money']) && !empty($cr_stm_map_ipd[$an]['compensated'])) {
+                        $row['follow_money'] = cleanNum($cr_stm_map_ipd[$an]['compensated']);
+                    }
                 }
             }
             $all_display_rows_ipd[] = $row;
@@ -6022,6 +6469,15 @@ if(isset($_POST['actionipdlistonly'])){
                     $row['sss_items'] = isset($sss_map_ipd[$an]['items']) ? $sss_map_ipd[$an]['items'] : [];
                     $row['follow_money'] = min(cleanNum($row['follow_money']), floatval($vinfo['sss_amount']));
                 }
+                // Fallback check from imr_tb_check_invoice for .310 if bill is empty
+                if ((empty($row['bill']) || $row['bill'] === '-') && isset($sss_stm_map_ipd[$an])) {
+                    $row['bill'] = $sss_stm_map_ipd[$an]['bill'];
+                    $row['billdate'] = $sss_stm_map_ipd[$an]['billdate'];
+                    $row['mobile'] = $sss_stm_map_ipd[$an]['bill'];
+                    if (empty($row['follow_money']) && !empty($sss_stm_map_ipd[$an]['compensated'])) {
+                        $row['follow_money'] = cleanNum($sss_stm_map_ipd[$an]['compensated']);
+                    }
+                }
             } else {
                 $row['sss_origin_acc'] = '1102050101.310';
                 if (isset($sss_bd_map_ipd[$an])) {
@@ -6033,6 +6489,15 @@ if(isset($_POST['actionipdlistonly'])){
                 } else {
                     $row['sss_types'] = isset($sss_map_ipd[$an]['sss_types']) ? $sss_map_ipd[$an]['sss_types'] : ['SSS-Instrument'];
                     $row['sss_items'] = isset($sss_map_ipd[$an]['items']) ? $sss_map_ipd[$an]['items'] : [];
+                }
+                // Fallback check from imr_tb_check_invoice for .310 if bill is empty
+                if ((empty($row['bill']) || $row['bill'] === '-') && isset($sss_stm_map_ipd[$an])) {
+                    $row['bill'] = $sss_stm_map_ipd[$an]['bill'];
+                    $row['billdate'] = $sss_stm_map_ipd[$an]['billdate'];
+                    $row['mobile'] = $sss_stm_map_ipd[$an]['bill'];
+                    if (empty($row['follow_money']) && !empty($sss_stm_map_ipd[$an]['compensated'])) {
+                        $row['follow_money'] = cleanNum($sss_stm_map_ipd[$an]['compensated']);
+                    }
                 }
             }
             $all_display_rows_ipd[] = $row;
@@ -6054,12 +6519,12 @@ if(isset($_POST['actionipdlistonly'])){
                     }
 
                     // หักเงินชดเชยที่โอนไปผังลูกออก
-                    $cr_comp = isset($cr_bd_map_ipd[$an]) ? cleanNum($cr_bd_map_ipd[$an]['compensated']) : min(cleanNum($row['follow_money']), floatval($vinfo['cr_amount']));
+                    $cr_comp = isset($cr_bd_map_ipd[$an]) ? cleanNum($cr_bd_map_ipd[$an]['compensated']) : (floatval($vinfo['cr_compensated'] ?? 0));
                     $mother_comp = max(0, cleanNum($row['follow_money']) - $cr_comp);
                     $row['follow_money'] = $mother_comp;
 
                     // ถ้าเลขใบเสร็จในตารางหลักตรงกับใบเสร็จของผังลูก และหนี้ผังแม่ยังไม่จบ ให้เคลียร์เพื่อรอตัดหนี้ผังแม่
-                    $child_cr_bill = trim($cr_bd_map_ipd[$an]['bill'] ?? ($vinfo['bill'] ?? ''));
+                    $child_cr_bill = trim($cr_bd_map_ipd[$an]['bill'] ?? ($vinfo['bill'] ?? ($cr_stm_map_ipd[$an]['bill'] ?? '')));
                     $is_mother_debt_settled = ($mother_comp > 0 && ($row['debit'] - $mother_comp) <= 0.01);
                     if (!empty($child_cr_bill) && trim($row['bill']) === $child_cr_bill && !$is_mother_debt_settled) {
                         $row['bill'] = '';
@@ -6095,8 +6560,7 @@ if(isset($_POST['actionipdlistonly'])){
                     $row['follow_money'] = $mother_comp;
 
                     // ถ้าเลขใบเสร็จในตารางหลักตรงกับใบเสร็จของผังลูก และหนี้ผังแม่ยังไม่จบ ให้เคลียร์เพื่อรอตัดหนี้ผังแม่
-                    $child_sss_bill = trim($sss_bd_map_ipd[$an]['bill'] ?? ($vinfo['bill'] ?? ''));
-                    $is_mother_debt_settled = ($mother_comp > 0 && ($row['debit'] - $mother_comp) <= 0.01);
+                    $child_sss_bill = trim($sss_bd_map_ipd[$an]['bill'] ?? ($vinfo['bill'] ?? ($sss_stm_map_ipd[$an]['bill'] ?? '')));
                     if (!empty($child_sss_bill) && trim($row['bill']) === $child_sss_bill && !$is_mother_debt_settled) {
                         $row['bill'] = '';
                         $row['billdate'] = '';
@@ -6354,10 +6818,136 @@ if(isset($_POST['actionipdlistonly'])){
           }
       }
 
+      // 🌟 คำนวณยอดเงินชดเชยและดึงใบเสร็จแยกตามกลุ่มย่อย CR (IPD)
+      $cr_subgroup_comps_i = [];
+      $child_cr_total_comp = 0.0;
+      if (isset($cr_bd_map_ipd[$an]) && !empty($cr_bd_map_ipd[$an]['compensated'])) {
+          $child_cr_total_comp = floatval(cleanNum($cr_bd_map_ipd[$an]['compensated']));
+      } elseif (isset($cr_stm_map_ipd[$an]) && !empty($cr_stm_map_ipd[$an]['compensated'])) {
+          $child_cr_total_comp = floatval(cleanNum($cr_stm_map_ipd[$an]['compensated']));
+      } elseif ($is_target_217) {
+          $child_cr_total_comp = floatval(cleanNum($row['follow_money']));
+      }
+
+      $ae_stm_val = isset($cr_stm_map_ipd[$an]['ae']) ? floatval(cleanNum($cr_stm_map_ipd[$an]['ae'])) : 0.0;
+      $inst_stm_val = isset($cr_stm_map_ipd[$an]['inst']) ? floatval(cleanNum($cr_stm_map_ipd[$an]['inst'])) : 0.0;
+
+      if (!empty($cr_types)) {
+          // ถ้ามีกลุ่มย่อยที่ยอดหนี้ตรงกับเงินชดเชยรวมเป๊ะๆ ให้จับคู่กับกลุ่มย่อยนั้นก่อน
+          $exact_matched_type = null;
+          foreach ($cr_types as $ct) {
+              $sg_amt = isset($cr_subgroup_amounts_i[$ct]) ? floatval($cr_subgroup_amounts_i[$ct]) : 0.0;
+              if ($child_cr_total_comp > 0 && abs($sg_amt - $child_cr_total_comp) < 0.01) {
+                  $exact_matched_type = $ct;
+                  break;
+              }
+          }
+
+          if ($exact_matched_type !== null) {
+              foreach ($cr_types as $ct) {
+                  $cr_subgroup_comps_i[$ct] = ($ct === $exact_matched_type) ? $child_cr_total_comp : 0.0;
+              }
+          } else {
+              $allocated_comp_so_far = 0.0;
+              foreach ($cr_types as $ct) {
+                  $sg_amt = isset($cr_subgroup_amounts_i[$ct]) ? floatval($cr_subgroup_amounts_i[$ct]) : 0.0;
+                  $c_comp = 0.0;
+                  if ($ae_stm_val > 0 && (strpos($ct, 'รถรีเฟอร์') !== false || strpos($ct, 'AE') !== false)) {
+                      $c_comp = min($ae_stm_val, $sg_amt);
+                  } elseif ($inst_stm_val > 0 && strpos($ct, 'Instrument') !== false) {
+                      $c_comp = min($inst_stm_val, $sg_amt);
+                  } elseif (count($cr_types) === 1) {
+                      $c_comp = min($child_cr_total_comp, $sg_amt);
+                  } else {
+                      $remain_comp = max(0.0, $child_cr_total_comp - $allocated_comp_so_far);
+                      $c_comp = min($remain_comp, $sg_amt);
+                  }
+                  $cr_subgroup_comps_i[$ct] = $c_comp;
+                  $allocated_comp_so_far += $c_comp;
+              }
+          }
+      }
+
+      // ใบเสร็จและวันที่ของผังลูก CR
+      $child_cr_bill = '';
+      $child_cr_billdate = '';
+      $child_cr_rep = '';
+      if (isset($cr_bd_map_ipd[$an])) {
+          $child_cr_bill = trim($cr_bd_map_ipd[$an]['bill'] ?? '');
+          $child_cr_billdate = trim($cr_bd_map_ipd[$an]['billdate'] ?? '');
+      }
+      if (empty($child_cr_bill) || $child_cr_bill === '-' || $child_cr_bill === '0000/0000') {
+          if (isset($cr_stm_map_ipd[$an])) {
+              $child_cr_bill = trim($cr_stm_map_ipd[$an]['bill'] ?? '');
+              $child_cr_billdate = trim($cr_stm_map_ipd[$an]['billdate'] ?? '');
+              $child_cr_rep = trim($cr_stm_map_ipd[$an]['rep'] ?? '');
+          }
+      }
+      if (empty($child_cr_bill) || $child_cr_bill === '-' || $child_cr_bill === '0000/0000') {
+          if (!empty($row['bill']) && trim($row['bill']) !== '-') {
+              $child_cr_bill = trim($row['bill']);
+              $child_cr_billdate = trim($row['billdate'] ?? '');
+          }
+      }
+      if (empty($child_cr_rep)) {
+          if (isset($cr_stm_map_ipd[$an]['rep']) && !empty($cr_stm_map_ipd[$an]['rep'])) {
+              $child_cr_rep = trim($cr_stm_map_ipd[$an]['rep']);
+          } elseif (!$is_target_217 && isset($all_rep_map_ipd[$an])) {
+              $child_cr_rep = trim($all_rep_map_ipd[$an]);
+          }
+      }
+      if ($child_cr_bill === '-' || $child_cr_bill === '0000/0000') {
+          $child_cr_bill = '';
+          $child_cr_billdate = '';
+      }
+
+      // SSS subgroup comps and bill
+      $sss_subgroup_comps_i = [];
+      $child_sss_total_comp = 0.0;
+      if (isset($sss_bd_map_ipd[$an]) && !empty($sss_bd_map_ipd[$an]['compensated'])) {
+          $child_sss_total_comp = floatval(cleanNum($sss_bd_map_ipd[$an]['compensated']));
+      } elseif (isset($sss_stm_map_ipd[$an]) && !empty($sss_stm_map_ipd[$an]['compensated'])) {
+          $child_sss_total_comp = floatval(cleanNum($sss_stm_map_ipd[$an]['compensated']));
+      } elseif ($is_target_310) {
+          $child_sss_total_comp = floatval(cleanNum($row['follow_money']));
+      }
+      if (!empty($sss_types)) {
+          foreach ($sss_types as $st) {
+              $sg_amt_s = isset($sss_subgroup_amounts_i[$st]) ? floatval($sss_subgroup_amounts_i[$st]) : 0.0;
+              $sss_subgroup_comps_i[$st] = min($child_sss_total_comp, $sg_amt_s);
+          }
+      }
+      $child_sss_bill = trim($sss_bd_map_ipd[$an]['bill'] ?? ($sss_stm_map_ipd[$an]['bill'] ?? ''));
+      $child_sss_billdate = trim($sss_bd_map_ipd[$an]['billdate'] ?? ($sss_stm_map_ipd[$an]['billdate'] ?? ''));
+      $child_sss_rep = trim($sss_stm_map_ipd[$an]['rep'] ?? '');
+      if (empty($child_sss_rep) && !$is_target_310 && isset($all_rep_map_ipd[$an])) {
+          $child_sss_rep = trim($all_rep_map_ipd[$an]);
+      }
+      if ($child_sss_bill === '-' || $child_sss_bill === '0000/0000') {
+          $child_sss_bill = '';
+          $child_sss_billdate = '';
+      }
+
+      $child_bill_final = !empty($child_cr_bill) ? $child_cr_bill : $child_sss_bill;
+      $child_billdate_final = !empty($child_cr_billdate) ? $child_cr_billdate : $child_sss_billdate;
+
+      if ($is_target_217) {
+          $child_rep_final = (!empty($child_cr_rep) && (!empty($cr_stm_map_ipd[$an]['rep']) || $child_cr_total_comp > 0)) ? $child_cr_rep : '';
+          $rep_show = $child_rep_final;
+      } elseif ($is_target_310) {
+          $child_rep_final = (!empty($child_sss_rep) && (!empty($sss_stm_map_ipd[$an]['rep']) || $child_sss_total_comp > 0)) ? $child_sss_rep : '';
+          $rep_show = $child_rep_final;
+      } else {
+          $child_rep_final = !empty($child_cr_rep) ? $child_cr_rep : (!empty($child_sss_rep) ? $child_sss_rep : ($all_rep_map_ipd[$an] ?? ''));
+          $rep_show = !empty($child_rep_final) ? $child_rep_final : (!empty($row['rep']) ? $row['rep'] : ($all_rep_map_ipd[$an] ?? ''));
+      }
+
       $all_subgroup_amounts_i = array_merge($cr_subgroup_amounts_i, $sss_subgroup_amounts_i);
       $amounts_json_i = htmlspecialchars(json_encode($all_subgroup_amounts_i, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
+      $all_subgroup_comps_i = array_merge($cr_subgroup_comps_i, $sss_subgroup_comps_i);
+      $comps_json_i = htmlspecialchars(json_encode($all_subgroup_comps_i, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
 
-      echo '  <tr class="main-patient-row" data-cr-type="' . htmlspecialchars($cr_type_str) . '" data-cr-amounts="' . $amounts_json_i . '" data-full-debit="' . floatval(cleanNum($row['debit'])) . '" data-full-income="' . floatval(cleanNum($row['income'])) . '" '.$row_color.'><td style="text-align: center;"><input type="checkbox" name="select[]" value="'.$row["an"].'" style=" width: 20px; height: 20px;"></td>';
+      echo '  <tr class="main-patient-row" data-cr-type="' . htmlspecialchars($cr_type_str) . '" data-cr-amounts="' . $amounts_json_i . '" data-cr-comps="' . $comps_json_i . '" data-cr-bill="' . htmlspecialchars($child_bill_final, ENT_QUOTES, 'UTF-8') . '" data-cr-billdate="' . htmlspecialchars($child_billdate_final, ENT_QUOTES, 'UTF-8') . '" data-cr-rep="' . htmlspecialchars($child_rep_final, ENT_QUOTES, 'UTF-8') . '" data-full-debit="' . floatval(cleanNum($row['debit'])) . '" data-full-income="' . floatval(cleanNum($row['income'])) . '" '.$row_color.'><td style="text-align: center;"><input type="checkbox" name="select[]" value="'.$row["an"].'" style=" width: 20px; height: 20px;"></td>';
 
       // =================================================================
       // CASE 1: มีเลข Bill แล้ว (จบหนี้)
@@ -6410,7 +7000,7 @@ if(isset($_POST['actionipdlistonly'])){
            } else {
                $show_bill_main = format_debtor_bill_no($row["bill"]);
                $show_date_main = $row["billdate"];
-               $bg_color_main  = 'background: #fff5e7;';
+               $bg_color_main  = (!empty($row["bill"]) && trim($row["bill"]) !== '-') ? 'background: #e6ffe6;' : 'background: #fff5e7;';
            }
 
            echo ' <td style="text-align: center;">'.$i.'</td>
@@ -6426,7 +7016,7 @@ if(isset($_POST['actionipdlistonly'])){
                   <td style="text-align: center;padding: 0px;background: #fff5e7;" contenteditable data-data1i="'.$row["an"].'" >'.formatMoney($row["follow_money"], 2).'</td>
                   <td class="mask-bill" style="text-align: center;'.$bg_color_main.'" contenteditable data-data2i="'.$row["an"].'" >'.$show_bill_main.'</td>
                   <td class="mask-date" style="text-align: center;'.$bg_color_main.'" contenteditable data-data3i="'.$row["an"].'" >'.$show_date_main.'</td>
-                  <td style="text-align: center;padding: 0px;background: #fff;" ></td>
+                  <td style="text-align: center;padding: 0px;background: #fff;" >'.$rep_show.'</td>
                   <td style="text-align: center;padding: 0px;background: #fff;" >'.$row["hn"].'</td>
               </tr>';
 
@@ -6436,27 +7026,53 @@ if(isset($_POST['actionipdlistonly'])){
           // =================================================================
           $an =$row["an"];
 
-          $sql1 = "SELECT o.an,stm.compensated,o.mobile,stm.rep,
+          // 🛑 ป้องกันเคสโอนเข้าผังลูก ดึงใบเสร็จและเงินชดเชยของผังแม่มาใช้ (ฝั่งลูกจะมี STM มาตัดอีกที)
+          $is_child_transferred = ($is_target_217 || $is_target_310) 
+              && (
+                  ($is_target_217 && isset($all_cr_visits_ipd[$an]))
+                  || ($is_target_310 && isset($all_sss_visits_ipd[$an]))
+              );
+
+          $sql1 = "SELECT o.an,
+                  stm.mother_comp,
+                  stm.compensated,
+                  o.mobile,
+                  stm.rep,
                   SUM(dckd.compensated) as compensatedckd,
                   SUM(ckd_ofc.amount) as compensatedckd_ofc,
                   dckd.rep as repckd,
                   ckd_ofc.stm_doc as stm_doc
                   FROM imr_tb_debtor_rights_ipd o
-                  LEFT JOIN imr_tb_check_invoice stm on stm.vn=o.an
+                  LEFT JOIN (
+                      SELECT vn, MAX(rep) as rep,
+                             SUM(CASE WHEN accountcode NOT IN ('1102050101.216', '1102050101.217') THEN compensated ELSE 0 END) as mother_comp,
+                             SUM(compensated) as compensated
+                      FROM imr_tb_check_invoice
+                      GROUP BY vn
+                  ) stm on stm.vn=o.an
                   LEFT JOIN imr_tb_seamless_dckd dckd on dckd.vn=o.an
                   LEFT JOIN imr_tb_seamless_dckd_ofc ckd_ofc on ckd_ofc.vn=o.an
                   WHERE o.an='$an' and o.mobile REGEXP '^[0-9]{2,4}/[0-9]{2,4}-[0-9]{1,2}/[0-9]{1,2}/[0-9]{3,4}$' GROUP BY o.an ";
 
-          $result1 = mysqli_query($conn, $sql1);
+          $result1 = (!$is_child_transferred) ? mysqli_query($conn, $sql1) : false;
 
-            if (mysqli_num_rows($result1) > 0) {
+          if ($result1 && mysqli_num_rows($result1) > 0) {
               while ($row1 = mysqli_fetch_assoc($result1)) {
                 if (isset($row1['cid'])) $row1['cid'] = decrypt_data($row1['cid']);
                 if (isset($row1['tel'])) $row1['tel'] = decrypt_data($row1['tel']);
 
-                if($row1["compensated"]){ $compensated=$row1["compensated"]; }
+                $is_mother_acc = (!empty($row['cr_transferred_out']) || strpos($row['accountcode'], '1102050101.202') !== false);
+                if ($is_mother_acc && isset($row1["mother_comp"]) && cleanNum($row1["mother_comp"]) > 0) {
+                    $compensated = $row1["mother_comp"];
+                } elseif($row1["compensated"]){ 
+                    $compensated=$row1["compensated"]; 
+                }
                 else if($row1["compensatedckd"]){ $compensated=$row1["compensatedckd"]; }
                 else{ $compensated=$row1["compensatedckd_ofc"]; }
+
+                if (!empty($row['cr_transferred_out']) && isset($cr_comp) && $cr_comp > 0 && !$is_mother_acc) {
+                    $compensated = max(0, cleanNum($compensated) - $cr_comp);
+                }
 
                 if($row1["rep"]){ $rep=$row1["rep"]; }
                 else if($row1["repckd"]){ $rep=$row1["repckd"]; }
@@ -6497,7 +7113,7 @@ if(isset($_POST['actionipdlistonly'])){
                               <td style="text-align: center;padding: 0px;background: #fff;" >'.$row["hn"].'</td>
                           </tr>';
 
-                $compensatedaa = $compensatedaa + cleanNum($row1["compensated"]) + cleanNum($row1["compensatedckd"]) + cleanNum($row1["compensatedckd_ofc"]);
+                $compensatedaa = $compensatedaa + cleanNum($compensated);
               }
 
             }else{
@@ -6549,7 +7165,7 @@ if(isset($_POST['actionipdlistonly'])){
                             <td style="text-align: center;padding: 0px;'.$c3_bg.'" contenteditable data-data1i="'.$row["an"].'" >'.formatMoney($row["follow_money"], 2).'</td>
                             <td class="mask-bill" style="text-align: center;'.$c3_bg.'" contenteditable data-data2i="'.$row["an"].'" >'.$c3_bill.'</td>
                             <td class="mask-date" style="text-align: center;'.$c3_bg.'" contenteditable data-data3i="'.$row["an"].'" >'.$c3_billdate.'</td>
-                            <td style="text-align: center;padding: 0px;background: #fff;"> </td>
+                            <td style="text-align: center;padding: 0px;background: #fff;" >'.$rep_show.'</td>
                             <td style="text-align: center;padding: 0px;background: #fff;" >'.$row["hn"].'</td>
                         </tr>';
             }
@@ -8779,6 +9395,28 @@ if(isset($_POST['actionipdlistonlypp'])){
                         }
                     }
                 }
+
+                // ดึงใบเสร็จและเงินชดเชยจาก imr_tb_check_invoice เป็น fallback สำหรับผังลูก .217 และ .310
+                $cr_stm_map_i = [];
+                $q_cr_stm_pp = mysqli_query($conn, "SELECT vn, bill, billdate, compensated FROM imr_tb_check_invoice WHERE accountcode = '1102050101.217' AND vn IN ($safe_det_ans) AND bill IS NOT NULL AND TRIM(bill) != '' AND TRIM(bill) != '-' AND TRIM(bill) != '0000/0000' ORDER BY id DESC");
+                if ($q_cr_stm_pp) {
+                    while ($st = mysqli_fetch_assoc($q_cr_stm_pp)) {
+                        $v = $st['vn'];
+                        if (!isset($cr_stm_map_i[$v])) {
+                            $cr_stm_map_i[$v] = $st;
+                        }
+                    }
+                }
+                $sss_stm_map_i = [];
+                $q_sss_stm_pp = mysqli_query($conn, "SELECT vn, bill, billdate, compensated FROM imr_tb_check_invoice WHERE accountcode = '1102050101.310' AND vn IN ($safe_det_ans) AND bill IS NOT NULL AND TRIM(bill) != '' AND TRIM(bill) != '-' AND TRIM(bill) != '0000/0000' ORDER BY id DESC");
+                if ($q_sss_stm_pp) {
+                    while ($st = mysqli_fetch_assoc($q_sss_stm_pp)) {
+                        $v = $st['vn'];
+                        if (!isset($sss_stm_map_i[$v])) {
+                            $sss_stm_map_i[$v] = $st;
+                        }
+                    }
+                }
             }
 
             $all_display_rows = [];
@@ -8804,11 +9442,27 @@ if(isset($_POST['actionipdlistonlypp'])){
                             $row['compensated'] = cleanNum($cr_bd_map_i[$an]['compensated']);
                             $row['bill'] = $cr_bd_map_i[$an]['bill'];
                             $row['billdate'] = $cr_bd_map_i[$an]['billdate'];
+                            $row['mobile'] = $cr_bd_map_i[$an]['bill'];
                         } else {
                             $row['cr_types'] = isset($cr_map_ipd[$an]['cr_types']) ? $cr_map_ipd[$an]['cr_types'] : [];
                             $row['items'] = isset($cr_map_ipd[$an]['items']) ? $cr_map_ipd[$an]['items'] : [];
-                            $row['follow_money'] = min(cleanNum($row['follow_money'] ?? 0), floatval($vinfo['cr_amount']));
-                            $row['compensated'] = $row['follow_money'];
+                            // เคสโอนเข้าผังลูก (1102050101.217): ต้องตัดฝั่งแม่ก่อนเสมอ ฝั่งลูกจะมี STM มาตัดอีกที
+                            $row['follow_money'] = 0.0;
+                            $row['compensated'] = 0.0;
+                            $row['bill'] = '';
+                            $row['billdate'] = '';
+                            $row['bookno'] = '';
+                            $row['mobile'] = '';
+                        }
+                        // Fallback check from imr_tb_check_invoice for .217 if bill is empty
+                        if ((empty($row['bill']) || $row['bill'] === '-') && isset($cr_stm_map_i[$an])) {
+                            $row['bill'] = $cr_stm_map_i[$an]['bill'];
+                            $row['billdate'] = $cr_stm_map_i[$an]['billdate'];
+                            $row['mobile'] = $cr_stm_map_i[$an]['bill'];
+                            if (empty($row['follow_money']) && !empty($cr_stm_map_i[$an]['compensated'])) {
+                                $row['follow_money'] = cleanNum($cr_stm_map_i[$an]['compensated']);
+                                $row['compensated'] = $row['follow_money'];
+                            }
                         }
                     } else {
                         $row['cr_origin_acc'] = '1102050101.217';
@@ -8822,6 +9476,16 @@ if(isset($_POST['actionipdlistonlypp'])){
                         } else {
                             $row['cr_types'] = isset($cr_map_ipd[$an]['cr_types']) ? $cr_map_ipd[$an]['cr_types'] : [];
                             $row['items'] = isset($cr_map_ipd[$an]['items']) ? $cr_map_ipd[$an]['items'] : [];
+                        }
+                        // Fallback check from imr_tb_check_invoice for .217 if bill is empty
+                        if ((empty($row['bill']) || $row['bill'] === '-') && isset($cr_stm_map_i[$an])) {
+                            $row['bill'] = $cr_stm_map_i[$an]['bill'];
+                            $row['billdate'] = $cr_stm_map_i[$an]['billdate'];
+                            $row['mobile'] = $cr_stm_map_i[$an]['bill'];
+                            if (empty($row['follow_money']) && !empty($cr_stm_map_i[$an]['compensated'])) {
+                                $row['follow_money'] = cleanNum($cr_stm_map_i[$an]['compensated']);
+                                $row['compensated'] = $row['follow_money'];
+                            }
                         }
                     }
                     $all_display_rows[] = $row;
@@ -8846,6 +9510,16 @@ if(isset($_POST['actionipdlistonlypp'])){
                             $row['follow_money'] = min(cleanNum($row['follow_money'] ?? 0), floatval($vinfo['sss_amount']));
                             $row['compensated'] = $row['follow_money'];
                         }
+                        // Fallback check from imr_tb_check_invoice for .310 if bill is empty
+                        if ((empty($row['bill']) || $row['bill'] === '-') && isset($sss_stm_map_i[$an])) {
+                            $row['bill'] = $sss_stm_map_i[$an]['bill'];
+                            $row['billdate'] = $sss_stm_map_i[$an]['billdate'];
+                            $row['mobile'] = $sss_stm_map_i[$an]['bill'];
+                            if (empty($row['follow_money']) && !empty($sss_stm_map_i[$an]['compensated'])) {
+                                $row['follow_money'] = cleanNum($sss_stm_map_i[$an]['compensated']);
+                                $row['compensated'] = $row['follow_money'];
+                            }
+                        }
                     } else {
                         $row['sss_origin_acc'] = '1102050101.310';
                         if (isset($sss_bd_map_i[$an])) {
@@ -8858,6 +9532,16 @@ if(isset($_POST['actionipdlistonlypp'])){
                         } else {
                             $row['sss_types'] = isset($sss_map_ipd[$an]['sss_types']) ? $sss_map_ipd[$an]['sss_types'] : ['SSS-Instrument'];
                             $row['sss_items'] = isset($sss_map_ipd[$an]['items']) ? $sss_map_ipd[$an]['items'] : [];
+                        }
+                        // Fallback check from imr_tb_check_invoice for .310 if bill is empty
+                        if ((empty($row['bill']) || $row['bill'] === '-') && isset($sss_stm_map_i[$an])) {
+                            $row['bill'] = $sss_stm_map_i[$an]['bill'];
+                            $row['billdate'] = $sss_stm_map_i[$an]['billdate'];
+                            $row['mobile'] = $sss_stm_map_i[$an]['bill'];
+                            if (empty($row['follow_money']) && !empty($sss_stm_map_i[$an]['compensated'])) {
+                                $row['follow_money'] = cleanNum($sss_stm_map_i[$an]['compensated']);
+                                $row['compensated'] = $row['follow_money'];
+                            }
                         }
                     }
                     $all_display_rows[] = $row;
@@ -8879,7 +9563,7 @@ if(isset($_POST['actionipdlistonlypp'])){
                             }
 
                             // หักเงินชดเชยที่โอนไปผังลูกออก
-                            $cr_comp = isset($cr_bd_map_i[$an]) ? cleanNum($cr_bd_map_i[$an]['compensated']) : min(cleanNum($row['compensated'] ?? $row['follow_money']), floatval($vinfo['cr_amount']));
+                            $cr_comp = isset($cr_bd_map_i[$an]) ? cleanNum($cr_bd_map_i[$an]['compensated']) : (floatval($vinfo['cr_compensated'] ?? 0));
                             $mother_comp = max(0, cleanNum($row['compensated'] ?? $row['follow_money']) - $cr_comp);
                             $row['follow_money'] = $mother_comp;
                             $row['compensated'] = $mother_comp;

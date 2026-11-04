@@ -1553,8 +1553,9 @@ if (!function_exists('get_cr_splitting_summary_for_month')) {
                         $bd_ex = $cr_bd_existing_map[$vn];
                         $has_saved_items = (!empty($bd_ex['items_data']) && $bd_ex['items_data'] !== '[]' && $bd_ex['items_data'] !== 'null');
                         $is_currently_detected = ($cr_info && !empty($cr_info['cr_types']));
+                        $has_recorded_cr = (!empty($bd_ex['cr_type']) && floatval($bd_ex['item_amount']) > 0);
 
-                        if ($is_currently_detected || $has_saved_items) {
+                        if ($is_currently_detected || $has_saved_items || $has_recorded_cr) {
                             $types_arr = array_filter(array_map('trim', explode(',', $bd_ex['cr_type'])));
                             // 🌟 ลำดับความสำคัญ (Priority Rule): หากบันทึกเดิมมีกลุ่มโอน 100% (CR-AE หรือ CR-เกิดสิทธิทันที) 
                             // แต่กลุ่มดังกล่าวปิดใช้งานอยู่ ให้ตัด CR-walkin ออกด้วยตามกฎความสำคัญสูงสุด
@@ -1643,7 +1644,13 @@ if (!function_exists('get_cr_splitting_summary_for_month')) {
                         if (isset($cr_bd_comp_map[$vn])) {
                             $comp_transferred = $cr_bd_comp_map[$vn];
                         } else {
-                            $comp_transferred = min($total_comp_v, $cr_amt);
+                            if ($visit_type === 'IPD') {
+                                // เคสลูกหนี้ UC-IP (แม่ 202 / ลูก 217):
+                                // ต้องตัดฝั่งแม่ก่อนเสมอ ฝั่งลูกจะมี STM มาตัดอีกที
+                                $comp_transferred = 0.0;
+                            } else {
+                                $comp_transferred = min($total_comp_v, $cr_amt);
+                            }
                         }
                         $transfers[$p_acc]['comp_out'] += $comp_transferred;
 

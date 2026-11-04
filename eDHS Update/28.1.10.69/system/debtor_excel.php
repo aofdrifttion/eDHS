@@ -501,8 +501,15 @@ if ($is_cr_child_opd && !empty($cr_opd_visits_all)) {
                     $net_debit = max(0, $cr_debit - ($comp > 0 && !empty($bym) && $bym <= $target_ym ? $comp : 0));
                     if ($net_debit > 0.01 && !$is_paid) {
                         $types_label = !empty($vinfo['cr_types']) ? implode(', ', $vinfo['cr_types']) : 'CR';
-                        $r_in['type'] = 'OPD';
-                        list($r_bill, $r_billdate) = resolve_debtor_receipt($r_in, $conn, $r_in['bd_bill'] ?? null, $r_in['bd_billdate'] ?? null);
+                        if (empty($vinfo['is_full_transfer'])) {
+                            $r_in_clean = $r_in;
+                            $r_in_clean['bill'] = '';
+                            $r_in_clean['billdate'] = '';
+                            $r_in_clean['mobile'] = '';
+                            list($r_bill, $r_billdate) = resolve_debtor_receipt($r_in_clean, $conn, $r_in['bd_bill'] ?? null, $r_in['bd_billdate'] ?? null);
+                        } else {
+                            list($r_bill, $r_billdate) = resolve_debtor_receipt($r_in, $conn, $r_in['bd_bill'] ?? null, $r_in['bd_billdate'] ?? null);
+                        }
                         $final_rows[] = [
                             'vn'          => $r_in['vn'],
                             'vstdate'     => $r_in['vstdate'],
@@ -570,8 +577,15 @@ if ($is_cr_child_opd && !empty($cr_opd_visits_all)) {
                     $net_debit = max(0, $cr_debit - ($comp > 0 && !empty($bym) && $bym <= $target_ym ? $comp : 0));
                     if ($net_debit > 0.01 && !$is_paid) {
                         $types_label = !empty($vinfo['cr_types']) ? implode(', ', $vinfo['cr_types']) : 'CR IPD';
-                        $r_in['type'] = 'IPD';
-                        list($r_bill, $r_billdate) = resolve_debtor_receipt($r_in, $conn, $r_in['bd_bill'] ?? null, $r_in['bd_billdate'] ?? null);
+                        if (empty($vinfo['is_full_transfer'])) {
+                            $r_in_clean = $r_in;
+                            $r_in_clean['bill'] = '';
+                            $r_in_clean['billdate'] = '';
+                            $r_in_clean['mobile'] = '';
+                            list($r_bill, $r_billdate) = resolve_debtor_receipt($r_in_clean, $conn, $r_in['bd_bill'] ?? null, $r_in['bd_billdate'] ?? null);
+                        } else {
+                            list($r_bill, $r_billdate) = resolve_debtor_receipt($r_in, $conn, $r_in['bd_bill'] ?? null, $r_in['bd_billdate'] ?? null);
+                        }
                         $final_rows[] = [
                             'vn'          => $r_in['vn'],
                             'vstdate'     => $r_in['vstdate'],
