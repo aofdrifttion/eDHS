@@ -398,7 +398,7 @@
           <div class="flex-grow-1">
             <div class="stm-kpi-val text-success" id="cr_card_ready_val">0 ราย | ฿0.00</div>
             <div class="stm-kpi-lbl fw-bold text-dark">พร้อมตัดหนี้ CR (ยอดชดเชยปกติ)</div>
-            <div class="text-muted" style="font-size: 11px;">ตัดหนี้ผัง CR (1102050101.216) ตามยอดเงินที่ได้รับจริง</div>
+            <div class="text-muted" id="cr_card_ready_sub" style="font-size: 11px;">ตัดหนี้ผัง CR (1102050101.216) ตามยอดเงินที่ได้รับจริง</div>
           </div>
         </div>
 
@@ -673,6 +673,9 @@ function populateStmPreviewModal(data) {
 
   // 3. KPI Chips / CR Hero Decision Cards Branching
   var isCr = (data.format_type === 'INDIVIDUAL_CR');
+  var isIpd = (meta && meta.visit_type === 'IPD');
+  var crSuffix = isIpd ? '.217' : '.216';
+  var crAccFull = isIpd ? '1102050101.217' : '1102050101.216';
 
   if (isCr) {
     $('#stm_kpi_chips_container').hide();
@@ -685,6 +688,7 @@ function populateStmPreviewModal(data) {
     if (readyNonZeroCases < 0) readyNonZeroCases = 0;
 
     $('#cr_card_ready_val').text(readyNonZeroCases.toLocaleString() + ' ราย | ฿' + formatStmMoney(kpi.ready_cr_comp || 0));
+    $('#cr_card_ready_sub').text('ตัดหนี้ผัง CR (' + crAccFull + ') ตามยอดเงินที่ได้รับจริง');
     $('#cr_card_zero_val').text(zeroCases.toLocaleString() + ' ราย | ฿0.00');
     $('#cr_card_revenue_val').text((kpi.already_billed_cases || 0).toLocaleString() + ' ราย | ฿' + formatStmMoney(kpi.already_billed_comp || 0));
     $('#cr_card_total_val').text((kpi.total_cases || 0).toLocaleString() + ' ราย | ฿' + formatStmMoney(kpi.total_comp || 0));
@@ -715,7 +719,7 @@ function populateStmPreviewModal(data) {
     var crTheadHtml = '<tr>' +
       '<th style="width: 55px;">ลำดับ</th>' +
       '<th style="text-align: left;">หมวดการชดเชยค่าบริการทางการแพทย์ (CR)</th>' +
-      '<th style="text-align: right; width: 180px;">พร้อมตัดหนี้ CR (.216)</th>' +
+      '<th style="text-align: right; width: 180px;">พร้อมตัดหนี้ CR (' + crSuffix + ')</th>' +
       '<th style="text-align: right; width: 180px;">รับรู้เป็นรายได้ (มีใบเสร็จเดิม)</th>' +
       '<th style="text-align: right; width: 180px;">รวมเงินชดเชย (บาท)</th>' +
       '<th style="width: 100px; text-align: center;">สัดส่วน</th>' +
@@ -857,7 +861,7 @@ function populateStmPreviewModal(data) {
       if (isZeroComp) {
         matchBadge = '<span class="badge bg-label-info text-info small" title="ชดเชย 0.00 บาทตาม Statement พร้อมตัดหนี้ผัง CR"><i class="bx bx-check-double"></i> พร้อมตัดหนี้ CR (0.00 บ.)</span>';
       } else {
-        matchBadge = '<span class="badge bg-success small" title="พร้อมตัดหนี้ CR เข้าผัง 1102050101.216"><i class="bx bx-check-circle"></i> พร้อมตัดหนี้ CR (.216)</span>';
+        matchBadge = '<span class="badge bg-success small" title="พร้อมตัดหนี้ CR เข้าผัง ' + crAccFull + '"><i class="bx bx-check-circle"></i> พร้อมตัดหนี้ CR (' + crSuffix + ')</span>';
       }
     } else if (p.paidtype === 'ALREADY_BILLED_PARENT') {
       matchBadge = '<span class="badge bg-warning text-dark small" title="มีใบเสร็จในผังหลักแล้ว (ล็อกความปลอดภัย ไม่ตัดหนี้ซ้ำ)"><i class="bx bx-shield-quarter"></i> มีใบเสร็จเดิม (รับรู้รายได้)</span>';

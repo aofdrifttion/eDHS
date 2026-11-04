@@ -1357,7 +1357,7 @@ function parse_nhso_stm_workbook($filePath, $expectedFund = 'UCS', $expectedHosp
                 unset($spreadsheet, $reader);
                 if ($res['status'] === 'success') {
                     $is_cr = ($forcedServiceType === 'CR') || ($forcedServiceType === 'AUTO' && (
-                        preg_match('/OPUCS.*_02/i', $res['metadata']['docno'] ?? '') !== 0 ||
+                        preg_match('/(OPUCS|IPUCS).*_02/i', $res['metadata']['docno'] ?? '') !== 0 ||
                         preg_match('/_02(\.|\b)/i', basename($filePath)) !== 0
                     ));
                     if ($is_cr) {
@@ -1735,8 +1735,11 @@ function resolve_stm_debtor_matches($conn, &$patients, $visitType = 'OPD', $form
             $p['is_matched'] = 1;
             $matched_count++;
 
-            if ($visitType === 'IPD') {
-                // สำหรับ IPD: ตรวจสอบว่ามีบันทึกใน imr_tb_debtor_cr_breakdown หรือไม่
+            $target_cr_acc = ($visitType === 'IPD') ? '1102050101.217' : '1102050101.216';
+            $target_cr_name = ($visitType === 'IPD') ? 'ลูกหนี้ค่ารักษา UC - IP บริการเฉพาะ (CR)' : 'ลูกหนี้ค่ารักษา UC - OP บริการเฉพาะ (CR)';
+
+            if ($visitType === 'IPD' && !$is_cr_file) {
+                // สำหรับ IPD ปกติ: ตรวจสอบว่ามีบันทึกใน imr_tb_debtor_cr_breakdown หรือไม่
                 if (isset($cr_breakdown_by_vn[$realVn])) {
                     $matched['cr_breakdown'] = $cr_breakdown_by_vn[$realVn];
                     $p['has_cr_breakdown'] = 1;
@@ -1744,7 +1747,7 @@ function resolve_stm_debtor_matches($conn, &$patients, $visitType = 'OPD', $form
                 $p['paidtype'] = 'READY_NORMAL';
                 $p['is_already_billed'] = 0;
             } elseif ($is_cr_file) {
-                // ตรวจสอบเฉพาะกรณีไฟล์ Statement บริการเฉพาะ OPD (CR / Fee Schedule: format_type === 'INDIVIDUAL' หรือ 'INDIVIDUAL_CR')
+                // ตรวจสอบกรณีไฟล์ Statement บริการเฉพาะ (CR / Fee Schedule: format_type === 'INDIVIDUAL' หรือ 'INDIVIDUAL_CR')
                 $compVal = (float)($p['compensated'] ?? 0);
                 $has_cr_wait = false;
                 $cr_wait_item_amount = 0.0;
@@ -1756,19 +1759,19 @@ function resolve_stm_debtor_matches($conn, &$patients, $visitType = 'OPD', $form
                         }
                     }
                 }
-                $is_native_216 = (strpos($matched['accountcode'], '1102050101.216') !== false);
+                $is_native_cr = (strpos($matched['accountcode'], $target_cr_acc) !== false);
                 // ตรวจสอบสถานะการแนบใบเสร็จ Statement: ในระบบ eDHS ลูกหนี้ OPD สถานะตัดหนี้ Statement เก็บในฟิลด์ mobile (รูปแบบ 'เลขที่/เล่มที่-วว/ดด/ปปปป')
                 // ส่วนฟิลด์ bill ใน imr_tb_debtor_rights_opd เก็บเลขใบเสร็จ รพ. จาก HOSxP (เช่น 0001/0001) จึงต้องเช็คเฉพาะ mobile หรือ cr_breakdown ที่ SETTLED แล้ว
                 $is_parent_billed = (!empty($matched['mobile']) && $matched['mobile'] !== '-');
 
-                if ($has_cr_wait || ($is_native_216 && !$is_parent_billed) || (!$is_parent_billed)) {
+                if ($has_cr_wait || ($is_native_cr && !$is_parent_billed) || (!$is_parent_billed)) {
                     $p['paidtype'] = 'READY_CR';
                     $p['is_already_billed'] = 0;
-                    $matched['accountcode'] = '1102050101.216';
-                    $matched['accountname'] = 'ลูกหนี้ค่ารักษา UC - OP บริการเฉพาะ (CR)';
+                    $matched['accountcode'] = $target_cr_acc;
+                    $matched['accountname'] = $target_cr_name;
                     if ($has_cr_wait && $cr_wait_item_amount > 0) {
                         $matched['debit'] = $cr_wait_item_amount;
-                    } elseif ($is_native_216 && (float)$matched['debit'] > 0) {
+                    } elseif ($is_native_cr && (float)$matched['debit'] > 0) {
                         $matched['debit'] = (float)$matched['debit'];
                     } else {
                         $matched['debit'] = (float)($p['collected'] ?? $p['compensated']);
@@ -1776,14 +1779,14 @@ function resolve_stm_debtor_matches($conn, &$patients, $visitType = 'OPD', $form
                 } elseif ($is_parent_billed) {
                     $p['paidtype'] = 'ALREADY_BILLED_PARENT';
                     $p['is_already_billed'] = 1;
-                    $matched['accountcode'] = '1102050101.216';
-                    $matched['accountname'] = 'ลูกหนี้ค่ารักษา UC - OP บริการเฉพาะ (CR) (มีใบเสร็จเดิม)';
+                    $matched['accountcode'] = $target_cr_acc;
+                    $matched['accountname'] = $target_cr_name . ' (มีใบเสร็จเดิม)';
                     $matched['debit'] = 0.0;
                 } else {
                     $p['paidtype'] = 'READY_CR';
                     $p['is_already_billed'] = 0;
-                    $matched['accountcode'] = '1102050101.216';
-                    $matched['accountname'] = 'ลูกหนี้ค่ารักษา UC - OP บริการเฉพาะ (CR)';
+                    $matched['accountcode'] = $target_cr_acc;
+                    $matched['accountname'] = $target_cr_name;
                 }
             } else {
                 // กรณีไฟล์ STM ผู้ป่วยนอกปกติ (เหมาจ่าย/บริการทั่วไป 4 แผ่นงาน หรือ Non-UC)
@@ -1798,12 +1801,14 @@ function resolve_stm_debtor_matches($conn, &$patients, $visitType = 'OPD', $form
             $p['paidtype'] = $is_cr_file ? 'READY_CR' : 'UNMATCHED';
             $p['is_already_billed'] = 0;
             if ($is_cr_file) {
+                $target_cr_acc = ($visitType === 'IPD') ? '1102050101.217' : '1102050101.216';
+                $target_cr_name = ($visitType === 'IPD') ? 'ลูกหนี้ค่ารักษา UC - IP บริการเฉพาะ (CR)' : 'ลูกหนี้ค่ารักษา UC - OP บริการเฉพาะ (CR)';
                 $matched_debtor_map[$origVn] = [
                     'vn' => $origVn,
                     'hn' => $cleanHn,
                     'debit' => $claim > 0 ? $claim : $compVal,
-                    'accountcode' => '1102050101.216',
-                    'accountname' => 'ลูกหนี้ค่ารักษา UC - OP บริการเฉพาะ (CR)',
+                    'accountcode' => $target_cr_acc,
+                    'accountname' => $target_cr_name,
                     'pttypename' => 'บัตรทอง UC (CR)',
                     'pttype_eclaim_name' => 'UC บริการเฉพาะ (CR)',
                     'bill' => '',
@@ -1985,8 +1990,8 @@ function enrich_and_insert_stm_patients($conn, $patients, $meta, $overwrite = fa
                 $unmatched_count++;
                 $debit = $collected; // Fallback ยอดเรียกเก็บ
                 if (($p['paidtype'] ?? '') === 'READY_CR' || $is_cr_doc) {
-                    $accCode = '1102050101.216';
-                    $accName = 'ลูกหนี้ค่ารักษา UC - OP บริการเฉพาะ (CR)';
+                    $accCode = ($visit_type === 'IPD') ? '1102050101.217' : '1102050101.216';
+                    $accName = ($visit_type === 'IPD') ? 'ลูกหนี้ค่ารักษา UC - IP บริการเฉพาะ (CR)' : 'ลูกหนี้ค่ารักษา UC - OP บริการเฉพาะ (CR)';
                     $pttypeName = 'บัตรทอง UC (CR)';
                     $eclaimName = 'UC บริการเฉพาะ (CR)';
                 } elseif ($visit_type === 'IPD') {
@@ -2279,10 +2284,12 @@ function enrich_and_insert_stm_patients($conn, $patients, $meta, $overwrite = fa
             $inserted_count++;
 
             // ==============================================================
-            // 🌟 ซิงค์หรือสร้างรายการลูกหนี้ CR ใน imr_tb_debtor_cr_breakdown สำหรับ OPD
-            // เพื่อให้มีข้อมูลในผัง CR (.216) ครบ 100% ทุกรายการตามข้อตกลง Grill-me
+            // 🌟 ซิงค์หรือสร้างรายการลูกหนี้ CR ใน imr_tb_debtor_cr_breakdown 
+            // ให้มีข้อมูลในผัง CR (.216 หรือ .217) ครบ 100% ทุกรายการตามข้อตกลง Grill-me
             // ==============================================================
-            if ($visit_type === 'OPD' && (($p['paidtype'] ?? '') === 'READY_CR' || $is_cr_doc)) {
+            if (($p['paidtype'] ?? '') === 'READY_CR' || $is_cr_doc) {
+                $target_cr_acc = ($visit_type === 'IPD') ? '1102050101.217' : '1102050101.216';
+                $parent_default = ($visit_type === 'IPD') ? '1102050101.202' : '1102050101.201';
                 $cr_proj = trim($p['projcode'] ?? '');
                 $cr_type_title = !empty($cr_proj) ? 'บริการเฉพาะ (' . $cr_proj . ')' : 'บริการเฉพาะ (CR)';
                 $safe_vn = mysqli_real_escape_string($conn, $vn);
@@ -2290,10 +2297,10 @@ function enrich_and_insert_stm_patients($conn, $patients, $meta, $overwrite = fa
                 $safe_cid = !empty($p['pid']) ? mysqli_real_escape_string($conn, $p['pid']) : '';
                 $safe_ptname = mysqli_real_escape_string($conn, $p['ptname'] ?? '');
                 $safe_admdate = mysqli_real_escape_string($conn, $admDate);
-                $parent_acc = !empty($d_info['accountcode']) ? mysqli_real_escape_string($conn, $d_info['accountcode']) : '1102050101.201';
+                $parent_acc = !empty($d_info['accountcode']) ? mysqli_real_escape_string($conn, $d_info['accountcode']) : $parent_default;
 
                 // ตรวจสอบว่ามีแถวใน imr_tb_debtor_cr_breakdown อยู่แล้วหรือไม่
-                $chk_q = mysqli_query($conn, "SELECT id, bill, settle_status FROM imr_tb_debtor_cr_breakdown WHERE visit_type = 'OPD' AND vn = '$safe_vn' LIMIT 1");
+                $chk_q = mysqli_query($conn, "SELECT id, bill, settle_status FROM imr_tb_debtor_cr_breakdown WHERE visit_type = '$visit_type' AND vn = '$safe_vn' LIMIT 1");
                 if ($chk_r = mysqli_fetch_assoc($chk_q)) {
                     // มีแถวอยู่แล้ว: อัปเดตยอดชดเชย
                     $upd_comp_sql = "UPDATE imr_tb_debtor_cr_breakdown 
@@ -2315,7 +2322,7 @@ function enrich_and_insert_stm_patients($conn, $patients, $meta, $overwrite = fa
                     $ins_cr_sql = "INSERT INTO imr_tb_debtor_cr_breakdown 
                                    (visit_type, vn, hn, cid, ptname, vstdate, monthtxt, parent_accountcode, cr_type, target_accountcode, item_amount, general_remain_amount, compensated, settle_status, items_data, created_at, updated_at)
                                    VALUES 
-                                   ('OPD', '$safe_vn', '$safe_hn', '$safe_cid', '$safe_ptname', '$safe_admdate', '$safe_month', '$parent_acc', '$cr_type_title', '1102050101.216', $debit, 0.00, $comp, 'WAIT', '[]', NOW(), NOW())";
+                                   ('$visit_type', '$safe_vn', '$safe_hn', '$safe_cid', '$safe_ptname', '$safe_admdate', '$safe_month', '$parent_acc', '$cr_type_title', '$target_cr_acc', $debit, 0.00, $comp, 'WAIT', '[]', NOW(), NOW())";
                     @mysqli_query($conn, $ins_cr_sql);
                 }
             }

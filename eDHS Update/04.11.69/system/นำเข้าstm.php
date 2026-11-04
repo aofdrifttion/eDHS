@@ -709,7 +709,7 @@ $yyy = date("Y")+543;
                           </label>
                           <select name="stm_service_type" id="stm_service_type" class="form-select stm-select">
                             <option value="AUTO" selected>🤖 ตรวจจับอัตโนมัติตามชื่องวด/ไฟล์</option>
-                            <option value="CR">⭐ บริการเฉพาะ (CR / Fee Schedule - ผัง 216)</option>
+                            <option value="CR" id="opt_cr_service">⭐ บริการเฉพาะ (CR / Fee Schedule - ผัง 216)</option>
                             <option value="NORMAL">📋 เหมาจ่าย / บริการทั่วไป (ผังปกติ)</option>
                           </select>
                         </div>
@@ -1161,15 +1161,37 @@ $yyy = date("Y")+543;
 
 
 
-      // ตรวจจับชื่อไฟล์อัตโนมัติเพื่อปรับประเภท Statement (CR / Fee Schedule)
-      $('#formFile').on('change', function() {
-        var fn = (this.files && this.files[0]) ? this.files[0].name.toUpperCase() : '';
-        if (fn.indexOf('_02') !== -1 || fn.indexOf('CR') !== -1 || fn.indexOf('INDIVIDUAL') !== -1) {
+      // ตรวจจับชื่อไฟล์อัตโนมัติเพื่อปรับประเภท Statement (CR / Fee Schedule ผัง 216 OPD vs ผัง 217 IPD)
+      function updateCrServiceDropdown() {
+        var fileInput = document.getElementById('formFile');
+        var fn = (fileInput && fileInput.files && fileInput.files[0]) ? fileInput.files[0].name.toUpperCase() : '';
+        var isIpd = (fn.indexOf('IPUCS') !== -1 || fn.indexOf('IP_') !== -1 || fn.indexOf('_IP') !== -1 || fn.startsWith('IP'));
+        var isCrFile = (fn.indexOf('_02') !== -1 || fn.indexOf('CR') !== -1 || fn.indexOf('INDIVIDUAL') !== -1);
+        
+        // สลับข้อความใน Dropdown ตัวเลือก CR
+        if (isIpd) {
+          $('#opt_cr_service').text('⭐ บริการเฉพาะ (CR / Fee Schedule - ผัง 217 IPD)');
+        } else {
+          $('#opt_cr_service').text('⭐ บริการเฉพาะ (CR / Fee Schedule - ผัง 216 OPD)');
+        }
+
+        // จัดการสถานะ badge และค่าใน dropdown
+        var currentServiceType = $('#stm_service_type').val();
+        if (isCrFile) {
           $('#stm_service_type').val('CR');
-          $('#cr_badge_hint').removeClass('d-none');
+          var crLabel = isIpd ? 'ผัง 217 (IPD)' : 'ผัง 216 (OPD)';
+          $('#cr_badge_hint').removeClass('d-none').html("<i class='bx bx-check'></i> ตรวจพบ CR " + crLabel);
+        } else if (currentServiceType === 'CR') {
+          var crLabel = isIpd ? 'ผัง 217 (IPD)' : 'ผัง 216 (OPD)';
+          $('#cr_badge_hint').removeClass('d-none').html("<i class='bx bx-check'></i> บังคับตัด CR " + crLabel);
         } else {
           $('#cr_badge_hint').addClass('d-none');
         }
+      }
+
+      $('#formFile').on('change', updateCrServiceDropdown);
+      $('#stm_service_type').on('change', function() {
+        updateCrServiceDropdown();
       });
 
       // ผูก Submit Handler ตรงเข้ากับ Form เพื่อความปลอดภัยและป้องกันการผูก Listener ซ้ำซ้อน
@@ -1722,7 +1744,9 @@ $yyy = date("Y")+543;
   <?php include './includes/quick_search_ui.html'; ?>
   <?php endif; ?>
 
-    <!-- 📊 Modal วิเคราะห์แนวโน้มลูกหนี้ย้อนหลังรายผังบัญชี (Debtor Trend Analytics) -->
-  <?php include_once './includes/modal_debtor_trend.php'; ?>
+    <!-- 📊 Modal วิเคราะห์แนวโน้มลูกหนี้ย้อนหลังรายผังบัญชี (Debtor Trend Analytics) -->
+
+  <?php include_once './includes/modal_debtor_trend.php'; ?>
+
 </body>
 </html>
