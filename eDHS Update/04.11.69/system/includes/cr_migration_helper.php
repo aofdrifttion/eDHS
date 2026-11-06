@@ -1587,6 +1587,11 @@ if (!function_exists('get_cr_splitting_summary_for_month')) {
                                 return is_cr_subgroup_enabled($config, $t, $visit_type, $monthtxt);
                             }));
 
+                            // 🌟 เคสที่สังกัดผังลูก 216 / 217 อยู่แล้วแต่แรก: ให้คงอยู่ในผังลูกเสมอ แม้กลุ่มย่อยยังไม่เปิดในเดือนนั้น
+                            if (empty($active_types) && ($p_acc === '1102050101.216' || $p_acc === '1102050101.217')) {
+                                $active_types = ['CR-General'];
+                            }
+
                             if (!empty($active_types)) {
                                 $is_locked_from_breakdown = true;
                                 $cr_amt = floatval($bd_ex['item_amount']);
