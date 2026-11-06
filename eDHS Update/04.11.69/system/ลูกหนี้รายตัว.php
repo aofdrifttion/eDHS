@@ -930,11 +930,21 @@ input[type="checkbox"] {
   cursor: pointer;
 }
 
-/* Enterprise Sub-Modals (#addAllbill & #modalPartialPayment) */
+/* Enterprise Sub-Modals (#addAllbill & #modalPartialPayment) - Multi-layer Z-Index Fix */
+.modal-luxury-dialog.modal {
+  z-index: 1100 !important;
+  background: rgba(15, 23, 42, 0.45) !important;
+  padding: 0 !important;
+}
+
+.modal-luxury-dialog .modal-dialog {
+  z-index: 1105 !important;
+}
+
 .modal-luxury-dialog .modal-content {
   border: none;
   border-radius: 16px;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
   overflow: hidden;
   background: #ffffff;
 }
@@ -3100,7 +3110,7 @@ input[type="checkbox"] {
               $('#pp_note').val('');
               $('#pp_bill_date').val('<?php echo date("d/m/").(date("Y")+543); ?>');
 
-              var myModal = new bootstrap.Modal(document.getElementById('modalPartialPayment'), { keyboard: false });
+              var myModal = bootstrap.Modal.getOrCreateInstance(document.getElementById('modalPartialPayment'), { keyboard: false });
               myModal.show();
               
           } catch (err) {
@@ -3152,7 +3162,7 @@ input[type="checkbox"] {
           }
 
           // เปิด Modal
-          var myModal = new bootstrap.Modal(document.getElementById('modalPartialPayment'));
+          var myModal = bootstrap.Modal.getOrCreateInstance(document.getElementById('modalPartialPayment'), { keyboard: false });
           myModal.show();
       }
 
@@ -3600,6 +3610,22 @@ $(document).on('show.bs.modal', '.modal', function () {
 $(document).on('hidden.bs.modal', '.modal', function () {
     if (!$('.modal.show, .modal.in').length) {
         $('.floating-logout-btn').show();
+    }
+});
+
+// จัดการลำดับชั้นของ Backdrop และรักษาสถานะ modal-open สำหรับ Sub-Modals ทั้งหมดที่เปิดเหนือ #myModalgetlistview
+$(document).on('show.bs.modal', '.modal-luxury-dialog, #modalCrPatientBreakdown, #modalSssPatientBreakdown', function () {
+    setTimeout(function () {
+        var backdrops = document.querySelectorAll('.modal-backdrop');
+        if (backdrops.length > 1) {
+            backdrops[backdrops.length - 1].style.zIndex = '1095';
+        }
+    }, 20);
+});
+
+$(document).on('hidden.bs.modal', '.modal-luxury-dialog, #modalCrPatientBreakdown, #modalSssPatientBreakdown', function () {
+    if ($('#myModalgetlistview').hasClass('show')) {
+        $('body').addClass('modal-open');
     }
 });
 

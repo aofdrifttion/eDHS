@@ -43,6 +43,13 @@
                     "color": "primary",
                     "icon": "bx-transfer-alt",
                     "description": "ปรับปรุงระบบนำเข้า STM และหน้าจออัปโหลดให้สลับตัวเลือกบริการเฉพาะ (CR) อัตโนมัติระหว่างผัง 216 (ผู้ป่วยนอก) และผัง 217 (ผู้ป่วยใน) ตามชื่อไฟล์ OPUCS/IPUCS พร้อมปรับปรุง Engine ตรวจสอบ STM และการกระจายยอด CR breakdown ให้ตรงผังบัญชีทั้ง OPD/IPD ครบวงจร"
+                },
+                {
+                    "category": "fix",
+                    "tag": "แก้ไข Modal บันทึกชำระหนี้แบบแบ่งจ่ายโดนบัง (Multi-layer Z-Index Fix)",
+                    "color": "warning",
+                    "icon": "bx-coin-stack",
+                    "description": "ปรับปรุงระดับชั้น z-index: 1100 / 1105 ให้กับหน้าต่างบันทึกการชำระหนี้แบบแบ่งจ่าย (#modalPartialPayment) และหน้าต่างแนบเลขที่ใบเสร็จ (#addAllbill) ให้ลอยซ้อนทับหน้าต่างลูกหนี้รายตัว (#myModalgetlistview) อย่างสมบูรณ์ 100% พร้อมจัดการลำดับชั้น Backdrop และคืนค่า scrollbar ให้หน้าต่างเดิมเมื่อปิดใช้งาน"
                 }
             ]
         },
