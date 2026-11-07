@@ -922,7 +922,19 @@ body.modal-open .floating-logout-btn,
   color: #0f172a;
 }
 
-/* Modal แนบใบเสร็จ Modern Design */
+/* Modal แนบใบเสร็จ Modern Design & Multi-layer Z-Index Fix */
+#myModalแนนใบ.modal,
+#myModalแนนใบckd.modal {
+  z-index: 1105 !important;
+  background: rgba(15, 23, 42, 0.45) !important;
+  padding: 0 !important;
+}
+
+#myModalแนนใบ .modal-dialog,
+#myModalแนนใบckd .modal-dialog {
+  z-index: 1106 !important;
+}
+
 .receipt-modal-content {
   border: none !important;
   border-radius: 16px !important;
@@ -2737,6 +2749,22 @@ body.modal-open .floating-logout-btn,
             $('body').removeClass('modal-open');
             $('#myInputModal').val('').trigger('keyup');
             $('#myInputModalCkd').val('').trigger('keyup');
+        });
+
+        // จัดการลำดับชั้นของ Backdrop และรักษาสถานะ modal-open เมื่อเปิด/ปิด Sub-Modals (#myModalแนนใบ, #myModalแนนใบckd) เหนือ #myModalget/#myModalgetckd
+        $(document).on('show.bs.modal', '#myModalแนนใบ, #myModalแนนใบckd', function () {
+            setTimeout(function () {
+                var backdrops = document.querySelectorAll('.modal-backdrop');
+                if (backdrops.length > 1) {
+                    backdrops[backdrops.length - 1].style.zIndex = '1104';
+                }
+            }, 20);
+        });
+
+        $(document).on('hidden.bs.modal', '#myModalแนนใบ, #myModalแนนใบckd', function () {
+            if ($('#myModalget').hasClass('show') || $('#myModalgetckd').hasClass('show')) {
+                $('body').addClass('modal-open');
+            }
         });
 
         function formatMoneyJS(num) {
