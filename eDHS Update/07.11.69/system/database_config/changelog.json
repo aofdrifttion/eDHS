@@ -42,7 +42,7 @@
                     "tag": "แก้ไขการแสดงผล Modal บันทึกแบ่งจ่ายและแนบใบเสร็จโดนแผ่นฉากหลังบัง (Z-Index Fix)",
                     "color": "warning",
                     "icon": "bx-layer",
-                    "description": "ปรับปรุงระดับชั้น Z-Index: 1100-1105 ให้กับหน้าต่างบันทึกการชำระหนี้แบบแบ่งจ่าย (#modalPartialPayment) และหน้าต่างแนบเลขที่ใบเสร็จ (#addAllbill) ให้ลอยซ้อนทับหน้าต่างลูกหนี้รายตัว (#myModalgetlistview) อย่างสมบูรณ์ 100% พร้อมจัดการลำดับชั้น Backdrop และคืนค่า scrollbar ให้หน้าต่างเดิมเมื่อปิดใช้งาน"
+                    "description": "ปรับปรุงระดับชั้น Z-Index: 1100-1106 ให้กับหน้าต่างบันทึกการชำระหนี้แบบแบ่งจ่าย (#modalPartialPayment), หน้าต่างแนบเลขที่ใบเสร็จ (#addAllbill ในลูกหนี้รายตัว) และหน้าต่างระบุเลขที่ใบเสร็จ Statement REP (#myModalแนนใบ, #myModalแนนใบckd ใน VlookUP) ให้ลอยเด่นซ้อนทับหน้าต่างแม่ (#myModalget, #myModalgetckd, #myModalgetlistview) อย่างสมบูรณ์ 100% พร้อมจัดการลำดับชั้น Backdrop และคืนค่า scrollbar ให้หน้าต่างเดิมเมื่อปิดใช้งาน"
                 }
             ]
         },
