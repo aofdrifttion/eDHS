@@ -3,6 +3,9 @@ header('Content-Type: text/html; charset=utf-8');
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+@ini_set('display_errors', 0);
+error_reporting(E_ALL & ~E_NOTICE & ~E_DEPRECATED);
+
 require './database_config/config.php';
 require_once './database_config/db_helper.php';
 require_once __DIR__ . '/includes/cr_migration_helper.php';
@@ -55,7 +58,8 @@ $typecc = isset($_POST['typecc']) ? trim($_POST['typecc']) : (isset($_SESSION['t
 if (empty($typecc)) {
     $typecc = (!empty($iid) && empty($oid)) ? 'IPD' : 'OPD';
 }
-$current_code = ($typecc == 'IPD') ? ($iid ?? '') : ($oid ?? '');
+$is_ipd = ($typecc === 'IPD');
+$current_code = $is_ipd ? ($iid ?? '') : ($oid ?? '');
 $account_name = '';
 
 if (!empty($current_code)) {
@@ -481,11 +485,12 @@ $yyy = date("Y")+543;
                                   // ============================================================
                                   // หาภาระหนี้ และจัดการกรณีตัดแยกค่ารักษา CR และ SSS ข้ามผัง
                                   // ============================================================
-                                  $is_cr_child_account = ($typecc == 'IPD') ? ($iid == '1102050101.217') : ($oid == '1102050101.216');
-                                  $is_parent_split_acc = ($typecc == 'IPD') ? ($iid == '1102050101.202') : in_array($oid, ['1102050101.201', '1102050101.209', '1102050101.203']);
+                                  $is_ipd = ($typecc === 'IPD');
+                                  $is_cr_child_account = $is_ipd ? ($iid == '1102050101.217') : ($oid == '1102050101.216');
+                                  $is_parent_split_acc = $is_ipd ? ($iid == '1102050101.202') : in_array($oid, ['1102050101.201', '1102050101.209', '1102050101.203']);
 
-                                  $is_sss_child_account = ($typecc == 'IPD') ? ($iid == '1102050101.310') : ($oid == '1102050101.309');
-                                  $is_sss_parent_split_acc = ($typecc == 'IPD') ? in_array($iid, ['1102050101.302', '1102050101.304', '1102050101.308']) : in_array($oid, ['1102050101.301', '1102050101.303', '1102050101.307']);
+                                  $is_sss_child_account = $is_ipd ? ($iid == '1102050101.310') : ($oid == '1102050101.309');
+                                  $is_sss_parent_split_acc = $is_ipd ? in_array($iid, ['1102050101.302', '1102050101.304', '1102050101.308']) : in_array($oid, ['1102050101.301', '1102050101.303', '1102050101.307']);
 
                                   $base_debt = (float)cleanNum($row["debit"]);
 
@@ -620,7 +625,12 @@ $yyy = date("Y")+543;
                                            // [ผังแม่ SSS (.301, .302, .303, .304, .307, .308)] หักเงินชดเชยที่โอนไปผังลูก SSS ออก
                                            $raw_comp = (float)$row["compensated"] + (float)$row["ckd_compensated"] + (float)$row["ofc_compensated"];
                                            if ($raw_comp == 0) $raw_comp = (float)$row["follow_money"];
-                                           $sss_comp = isset($sss_bd_map[$ref_id]) ? (float)cleanNum($sss_bd_map[$ref_id]['compensated']) : min($raw_comp, (float)$sss_visits_map[$ref_id]['sss_amount']);
+                                           if ($is_ipd) {
+                                               // สำหรับ IPD: ตัดฝั่งแม่ก่อนเสมอ หากลูกมี breakdown ค่อยหักออก
+                                               $sss_comp = isset($sss_bd_map[$ref_id]) ? (float)cleanNum($sss_bd_map[$ref_id]['compensated']) : 0.0;
+                                           } else {
+                                               $sss_comp = isset($sss_bd_map[$ref_id]) ? (float)cleanNum($sss_bd_map[$ref_id]['compensated']) : min($raw_comp, (float)$sss_visits_map[$ref_id]['sss_amount']);
+                                           }
                                            $mother_comp = max(0, $raw_comp - $sss_comp);
                                            $follow_money = $mother_comp;
 
