@@ -5342,8 +5342,19 @@ if(isset($_POST['actionopdlistonly'])){
             if ($q_cr_stm_opd) {
                 while ($st = mysqli_fetch_assoc($q_cr_stm_opd)) {
                     $v = $st['vn'];
-                    if (!isset($cr_stm_map[$v]) || (!empty($st['bill']) && empty($cr_stm_map[$v]['bill']))) {
+                    if (!isset($cr_stm_map[$v])) {
                         $cr_stm_map[$v] = $st;
+                    } else {
+                        if (!empty($st['bill']) && (empty($cr_stm_map[$v]['bill']) || $cr_stm_map[$v]['bill'] === '-')) {
+                            $cr_stm_map[$v]['bill'] = $st['bill'];
+                            $cr_stm_map[$v]['billdate'] = $st['billdate'];
+                        }
+                        if (!empty($st['rep']) && empty($cr_stm_map[$v]['rep'])) {
+                            $cr_stm_map[$v]['rep'] = $st['rep'];
+                        }
+                        if (empty($cr_stm_map[$v]['compensated']) && !empty($st['compensated'])) {
+                            $cr_stm_map[$v]['compensated'] = $st['compensated'];
+                        }
                     }
                 }
             }
@@ -5352,13 +5363,24 @@ if(isset($_POST['actionopdlistonly'])){
             if ($q_sss_stm_opd) {
                 while ($st = mysqli_fetch_assoc($q_sss_stm_opd)) {
                     $v = $st['vn'];
-                    if (!isset($sss_stm_map[$v]) || (!empty($st['bill']) && empty($sss_stm_map[$v]['bill']))) {
+                    if (!isset($sss_stm_map[$v])) {
                         $sss_stm_map[$v] = $st;
+                    } else {
+                        if (!empty($st['bill']) && (empty($sss_stm_map[$v]['bill']) || $sss_stm_map[$v]['bill'] === '-')) {
+                            $sss_stm_map[$v]['bill'] = $st['bill'];
+                            $sss_stm_map[$v]['billdate'] = $st['billdate'];
+                        }
+                        if (!empty($st['rep']) && empty($sss_stm_map[$v]['rep'])) {
+                            $sss_stm_map[$v]['rep'] = $st['rep'];
+                        }
+                        if (empty($sss_stm_map[$v]['compensated']) && !empty($st['compensated'])) {
+                            $sss_stm_map[$v]['compensated'] = $st['compensated'];
+                        }
                     }
                 }
             }
             // Fallback: ดึงใบเสร็จและ REP จากรายการอื่นใน imr_tb_check_invoice ของ vn เดียวกัน หรือจาก statement REP เดียวกัน
-            $q_vn_bills_o = mysqli_query($conn, "SELECT vn, rep, bill, billdate, compensated FROM imr_tb_check_invoice WHERE vn IN ($safe_det_vns) AND bill IS NOT NULL AND TRIM(bill) != '' AND TRIM(bill) != '-' ORDER BY id DESC");
+            $q_vn_bills_o = mysqli_query($conn, "SELECT vn, rep, bill, billdate, compensated FROM imr_tb_check_invoice WHERE vn IN ($safe_det_vns) AND (rep IS NOT NULL AND TRIM(rep) != '' OR (bill IS NOT NULL AND TRIM(bill) != '' AND TRIM(bill) != '-')) ORDER BY id DESC");
             if ($q_vn_bills_o) {
                 while ($vb = mysqli_fetch_assoc($q_vn_bills_o)) {
                     $v = $vb['vn'];
@@ -5370,6 +5392,8 @@ if(isset($_POST['actionopdlistonly'])){
                         if (empty($cr_stm_map[$v]['rep'])) {
                             $cr_stm_map[$v]['rep'] = $vb['rep'];
                         }
+                    } else {
+                        $cr_stm_map[$v] = $vb;
                     }
                     if (isset($sss_stm_map[$v])) {
                         if (empty($sss_stm_map[$v]['bill']) || $sss_stm_map[$v]['bill'] === '-') {
@@ -5379,6 +5403,8 @@ if(isset($_POST['actionopdlistonly'])){
                         if (empty($sss_stm_map[$v]['rep'])) {
                             $sss_stm_map[$v]['rep'] = $vb['rep'];
                         }
+                    } else {
+                        $sss_stm_map[$v] = $vb;
                     }
                 }
             }
@@ -5397,10 +5423,13 @@ if(isset($_POST['actionopdlistonly'])){
 
             // Pre-query REP numbers across tables for all VNs in safe_det_vns
             $all_rep_map_opd = [];
-            $q_all_reps_o = mysqli_query($conn, "SELECT vn, MAX(rep) as rep FROM imr_tb_check_invoice WHERE vn IN ($safe_det_vns) AND rep IS NOT NULL AND TRIM(rep) != '' GROUP BY vn");
+            $q_all_reps_o = mysqli_query($conn, "SELECT vn, rep FROM imr_tb_check_invoice WHERE vn IN ($safe_det_vns) AND rep IS NOT NULL AND TRIM(rep) != '' ORDER BY id DESC");
             if ($q_all_reps_o) {
                 while ($ar = mysqli_fetch_assoc($q_all_reps_o)) {
-                    $all_rep_map_opd[$ar['vn']] = trim($ar['rep']);
+                    $v = $ar['vn'];
+                    if (!isset($all_rep_map_opd[$v])) {
+                        $all_rep_map_opd[$v] = trim($ar['rep']);
+                    }
                 }
             }
             $q_ckd_reps_o = mysqli_query($conn, "SELECT vn, MAX(rep) as rep FROM imr_tb_seamless_dckd WHERE vn IN ($safe_det_vns) AND rep IS NOT NULL AND TRIM(rep) != '' GROUP BY vn");
@@ -5864,12 +5893,18 @@ if(isset($_POST['actionopdlistonly'])){
                 if (isset($cr_stm_map[$vn])) {
                     $child_cr_bill_o = trim($cr_stm_map[$vn]['bill'] ?? '');
                     $child_cr_billdate_o = trim($cr_stm_map[$vn]['billdate'] ?? '');
-                    $child_cr_rep_o = trim($cr_stm_map[$vn]['rep'] ?? '');
                 }
             }
             if ($child_cr_bill_o === '-' || $child_cr_bill_o === '0000/0000') {
                 $child_cr_bill_o = '';
                 $child_cr_billdate_o = '';
+            }
+
+            // 🌟 ดึงเลขที่หนังสือ REP จาก Statement ของ CR เสมอ (ไม่ว่าจะติดบิลแล้วหรือไม่)
+            if (isset($cr_stm_map[$vn]['rep']) && !empty($cr_stm_map[$vn]['rep'])) {
+                $child_cr_rep_o = trim($cr_stm_map[$vn]['rep']);
+            } elseif (isset($all_rep_map_opd[$vn]) && !empty($all_rep_map_opd[$vn])) {
+                $child_cr_rep_o = trim($all_rep_map_opd[$vn]);
             }
 
             // SSS subgroup comps and bill (OPD)
@@ -5890,7 +5925,12 @@ if(isset($_POST['actionopdlistonly'])){
             }
             $child_sss_bill_o = trim($sss_bd_map[$vn]['bill'] ?? ($sss_stm_map[$vn]['bill'] ?? ''));
             $child_sss_billdate_o = trim($sss_bd_map[$vn]['billdate'] ?? ($sss_stm_map[$vn]['billdate'] ?? ''));
-            $child_sss_rep_o = trim($sss_stm_map[$vn]['rep'] ?? '');
+            $child_sss_rep_o = '';
+            if (isset($sss_stm_map[$vn]['rep']) && !empty($sss_stm_map[$vn]['rep'])) {
+                $child_sss_rep_o = trim($sss_stm_map[$vn]['rep']);
+            } elseif (isset($all_rep_map_opd[$vn]) && !empty($all_rep_map_opd[$vn])) {
+                $child_sss_rep_o = trim($all_rep_map_opd[$vn]);
+            }
             if ($child_sss_bill_o === '-' || $child_sss_bill_o === '0000/0000') {
                 $child_sss_bill_o = '';
                 $child_sss_billdate_o = '';
@@ -5900,10 +5940,10 @@ if(isset($_POST['actionopdlistonly'])){
             $child_billdate_final_o = !empty($child_cr_billdate_o) ? $child_cr_billdate_o : $child_sss_billdate_o;
 
             if ($is_target_216) {
-                $child_rep_final_o = (!empty($child_cr_rep_o) && (!empty($cr_stm_map[$vn]['rep']) || $child_cr_total_comp_o > 0)) ? $child_cr_rep_o : '';
+                $child_rep_final_o = !empty($child_cr_rep_o) ? $child_cr_rep_o : (isset($all_rep_map_opd[$vn]) ? trim($all_rep_map_opd[$vn]) : '');
                 $rep_show_o = $child_rep_final_o;
             } elseif ($is_target_309) {
-                $child_rep_final_o = (!empty($child_sss_rep_o) && (!empty($sss_stm_map[$vn]['rep']) || $child_sss_total_comp_o > 0)) ? $child_sss_rep_o : '';
+                $child_rep_final_o = !empty($child_sss_rep_o) ? $child_sss_rep_o : (isset($all_rep_map_opd[$vn]) ? trim($all_rep_map_opd[$vn]) : '');
                 $rep_show_o = $child_rep_final_o;
             } else {
                 $child_rep_final_o = !empty($child_cr_rep_o) ? $child_cr_rep_o : (!empty($child_sss_rep_o) ? $child_sss_rep_o : ($all_rep_map_opd[$vn] ?? ''));
@@ -6039,7 +6079,8 @@ if(isset($_POST['actionopdlistonly'])){
 
                       if($row1["rep"]){ $rep=$row1["rep"]; }
                       else if($row1["repckd"]){ $rep=$row1["repckd"]; }
-                      else{ $rep=$row1["stm_doc"]; }
+                      else if(!empty($row1["stm_doc"])){ $rep=$row1["stm_doc"]; }
+                      else { $rep = $rep_show_o; }
 
                       list($bill1, $billdate1) = explode('-', $row1["mobile"]);
 
@@ -6450,8 +6491,19 @@ if(isset($_POST['actionipdlistonly'])){
         if ($q_cr_stm) {
             while ($st = mysqli_fetch_assoc($q_cr_stm)) {
                 $v = $st['vn'];
-                if (!isset($cr_stm_map_ipd[$v]) || (!empty($st['bill']) && empty($cr_stm_map_ipd[$v]['bill']))) {
+                if (!isset($cr_stm_map_ipd[$v])) {
                     $cr_stm_map_ipd[$v] = $st;
+                } else {
+                    if (!empty($st['bill']) && (empty($cr_stm_map_ipd[$v]['bill']) || $cr_stm_map_ipd[$v]['bill'] === '-')) {
+                        $cr_stm_map_ipd[$v]['bill'] = $st['bill'];
+                        $cr_stm_map_ipd[$v]['billdate'] = $st['billdate'];
+                    }
+                    if (!empty($st['rep']) && empty($cr_stm_map_ipd[$v]['rep'])) {
+                        $cr_stm_map_ipd[$v]['rep'] = $st['rep'];
+                    }
+                    if (empty($cr_stm_map_ipd[$v]['compensated']) && !empty($st['compensated'])) {
+                        $cr_stm_map_ipd[$v]['compensated'] = $st['compensated'];
+                    }
                 }
             }
         }
@@ -6460,14 +6512,25 @@ if(isset($_POST['actionipdlistonly'])){
         if ($q_sss_stm) {
             while ($st = mysqli_fetch_assoc($q_sss_stm)) {
                 $v = $st['vn'];
-                if (!isset($sss_stm_map_ipd[$v]) || (!empty($st['bill']) && empty($sss_stm_map_ipd[$v]['bill']))) {
+                if (!isset($sss_stm_map_ipd[$v])) {
                     $sss_stm_map_ipd[$v] = $st;
+                } else {
+                    if (!empty($st['bill']) && (empty($sss_stm_map_ipd[$v]['bill']) || $sss_stm_map_ipd[$v]['bill'] === '-')) {
+                        $sss_stm_map_ipd[$v]['bill'] = $st['bill'];
+                        $sss_stm_map_ipd[$v]['billdate'] = $st['billdate'];
+                    }
+                    if (!empty($st['rep']) && empty($sss_stm_map_ipd[$v]['rep'])) {
+                        $sss_stm_map_ipd[$v]['rep'] = $st['rep'];
+                    }
+                    if (empty($sss_stm_map_ipd[$v]['compensated']) && !empty($st['compensated'])) {
+                        $sss_stm_map_ipd[$v]['compensated'] = $st['compensated'];
+                    }
                 }
             }
         }
 
         // Fallback: ดึงใบเสร็จและ REP จากรายการอื่นใน imr_tb_check_invoice ของ vn เดียวกัน หรือจาก statement REP เดียวกัน
-        $q_vn_bills_i = mysqli_query($conn, "SELECT vn, rep, bill, billdate, compensated FROM imr_tb_check_invoice WHERE vn IN ($safe_det_ans) AND bill IS NOT NULL AND TRIM(bill) != '' AND TRIM(bill) != '-' ORDER BY id DESC");
+        $q_vn_bills_i = mysqli_query($conn, "SELECT vn, rep, bill, billdate, compensated FROM imr_tb_check_invoice WHERE vn IN ($safe_det_ans) AND (rep IS NOT NULL AND TRIM(rep) != '' OR (bill IS NOT NULL AND TRIM(bill) != '' AND TRIM(bill) != '-')) ORDER BY id DESC");
         if ($q_vn_bills_i) {
             while ($vb = mysqli_fetch_assoc($q_vn_bills_i)) {
                 $v = $vb['vn'];
@@ -6479,6 +6542,8 @@ if(isset($_POST['actionipdlistonly'])){
                     if (empty($cr_stm_map_ipd[$v]['rep'])) {
                         $cr_stm_map_ipd[$v]['rep'] = $vb['rep'];
                     }
+                } else {
+                    $cr_stm_map_ipd[$v] = $vb;
                 }
                 if (isset($sss_stm_map_ipd[$v])) {
                     if (empty($sss_stm_map_ipd[$v]['bill']) || $sss_stm_map_ipd[$v]['bill'] === '-') {
@@ -6488,6 +6553,8 @@ if(isset($_POST['actionipdlistonly'])){
                     if (empty($sss_stm_map_ipd[$v]['rep'])) {
                         $sss_stm_map_ipd[$v]['rep'] = $vb['rep'];
                     }
+                } else {
+                    $sss_stm_map_ipd[$v] = $vb;
                 }
             }
         }
@@ -6506,10 +6573,13 @@ if(isset($_POST['actionipdlistonly'])){
 
         // Pre-query REP numbers across tables for all ANs in safe_det_ans
         $all_rep_map_ipd = [];
-        $q_all_reps_i = mysqli_query($conn, "SELECT vn, MAX(rep) as rep FROM imr_tb_check_invoice WHERE vn IN ($safe_det_ans) AND rep IS NOT NULL AND TRIM(rep) != '' GROUP BY vn");
+        $q_all_reps_i = mysqli_query($conn, "SELECT vn, rep FROM imr_tb_check_invoice WHERE vn IN ($safe_det_ans) AND rep IS NOT NULL AND TRIM(rep) != '' ORDER BY id DESC");
         if ($q_all_reps_i) {
             while ($ar = mysqli_fetch_assoc($q_all_reps_i)) {
-                $all_rep_map_ipd[$ar['vn']] = trim($ar['rep']);
+                $v = $ar['vn'];
+                if (!isset($all_rep_map_ipd[$v])) {
+                    $all_rep_map_ipd[$v] = trim($ar['rep']);
+                }
             }
         }
         $q_ckd_reps_i = mysqli_query($conn, "SELECT vn, MAX(rep) as rep FROM imr_tb_seamless_dckd WHERE vn IN ($safe_det_ans) AND rep IS NOT NULL AND TRIM(rep) != '' GROUP BY vn");
@@ -7025,7 +7095,6 @@ if(isset($_POST['actionipdlistonly'])){
           if (isset($cr_stm_map_ipd[$an])) {
               $child_cr_bill = trim($cr_stm_map_ipd[$an]['bill'] ?? '');
               $child_cr_billdate = trim($cr_stm_map_ipd[$an]['billdate'] ?? '');
-              $child_cr_rep = trim($cr_stm_map_ipd[$an]['rep'] ?? '');
           }
       }
       if (empty($child_cr_bill) || $child_cr_bill === '-' || $child_cr_bill === '0000/0000') {
@@ -7034,16 +7103,16 @@ if(isset($_POST['actionipdlistonly'])){
               $child_cr_billdate = trim($row['billdate'] ?? '');
           }
       }
-      if (empty($child_cr_rep)) {
-          if (isset($cr_stm_map_ipd[$an]['rep']) && !empty($cr_stm_map_ipd[$an]['rep'])) {
-              $child_cr_rep = trim($cr_stm_map_ipd[$an]['rep']);
-          } elseif (!$is_target_217 && isset($all_rep_map_ipd[$an])) {
-              $child_cr_rep = trim($all_rep_map_ipd[$an]);
-          }
-      }
       if ($child_cr_bill === '-' || $child_cr_bill === '0000/0000') {
           $child_cr_bill = '';
           $child_cr_billdate = '';
+      }
+
+      // 🌟 ดึงเลขที่หนังสือ REP จาก Statement ของ CR เสมอ (ไม่ว่าจะติดบิลแล้วหรือไม่)
+      if (isset($cr_stm_map_ipd[$an]['rep']) && !empty($cr_stm_map_ipd[$an]['rep'])) {
+          $child_cr_rep = trim($cr_stm_map_ipd[$an]['rep']);
+      } elseif (isset($all_rep_map_ipd[$an]) && !empty($all_rep_map_ipd[$an])) {
+          $child_cr_rep = trim($all_rep_map_ipd[$an]);
       }
 
       // SSS subgroup comps and bill
@@ -7064,8 +7133,10 @@ if(isset($_POST['actionipdlistonly'])){
       }
       $child_sss_bill = trim($sss_bd_map_ipd[$an]['bill'] ?? ($sss_stm_map_ipd[$an]['bill'] ?? ''));
       $child_sss_billdate = trim($sss_bd_map_ipd[$an]['billdate'] ?? ($sss_stm_map_ipd[$an]['billdate'] ?? ''));
-      $child_sss_rep = trim($sss_stm_map_ipd[$an]['rep'] ?? '');
-      if (empty($child_sss_rep) && !$is_target_310 && isset($all_rep_map_ipd[$an])) {
+      $child_sss_rep = '';
+      if (isset($sss_stm_map_ipd[$an]['rep']) && !empty($sss_stm_map_ipd[$an]['rep'])) {
+          $child_sss_rep = trim($sss_stm_map_ipd[$an]['rep']);
+      } elseif (isset($all_rep_map_ipd[$an]) && !empty($all_rep_map_ipd[$an])) {
           $child_sss_rep = trim($all_rep_map_ipd[$an]);
       }
       if ($child_sss_bill === '-' || $child_sss_bill === '0000/0000') {
@@ -7077,10 +7148,10 @@ if(isset($_POST['actionipdlistonly'])){
       $child_billdate_final = !empty($child_cr_billdate) ? $child_cr_billdate : $child_sss_billdate;
 
       if ($is_target_217) {
-          $child_rep_final = (!empty($child_cr_rep) && (!empty($cr_stm_map_ipd[$an]['rep']) || $child_cr_total_comp > 0)) ? $child_cr_rep : '';
+          $child_rep_final = !empty($child_cr_rep) ? $child_cr_rep : (isset($all_rep_map_ipd[$an]) ? trim($all_rep_map_ipd[$an]) : '');
           $rep_show = $child_rep_final;
       } elseif ($is_target_310) {
-          $child_rep_final = (!empty($child_sss_rep) && (!empty($sss_stm_map_ipd[$an]['rep']) || $child_sss_total_comp > 0)) ? $child_sss_rep : '';
+          $child_rep_final = !empty($child_sss_rep) ? $child_sss_rep : (isset($all_rep_map_ipd[$an]) ? trim($all_rep_map_ipd[$an]) : '');
           $rep_show = $child_rep_final;
       } else {
           $child_rep_final = !empty($child_cr_rep) ? $child_cr_rep : (!empty($child_sss_rep) ? $child_sss_rep : ($all_rep_map_ipd[$an] ?? ''));
@@ -7242,7 +7313,8 @@ if(isset($_POST['actionipdlistonly'])){
 
                 if($row1["rep"]){ $rep=$row1["rep"]; }
                 else if($row1["repckd"]){ $rep=$row1["repckd"]; }
-                else{ $rep=$row1["stm_doc"]; }
+                else if(!empty($row1["stm_doc"])){ $rep=$row1["stm_doc"]; }
+                else { $rep = $rep_show; }
 
                  list($bill1, $billdate1) = explode('-', $row1["mobile"]);
 
