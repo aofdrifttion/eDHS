@@ -797,6 +797,9 @@ function parse_stm_lgo_eclaim($spreadsheet, $expectedFund = 'LGO', $expectedHosp
  * 4. Format Type D: SSS XML ZIP Parser (SIGN/SOGN)
  */
 function parse_stm_sss_zip($filePath, $expectedFund = 'SSS', $expectedHospcode = '') {
+    if (!class_exists('ZipArchive')) {
+        return ['status' => 'error', 'message' => 'เซิร์ฟเวอร์ยังไม่ได้เปิดใช้งานโมดูล ZipArchive (php_zip) กรุณาเปิด extension=zip ใน php.ini'];
+    }
     $zip = new ZipArchive();
     if ($zip->open($filePath) !== true) {
         return ['status' => 'error', 'message' => 'ไม่สามารถเปิดไฟล์ ZIP ได้'];

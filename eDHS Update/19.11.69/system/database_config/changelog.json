@@ -10,6 +10,13 @@
             "badge": "bg-primary",
             "changes": [
                 {
+                    "category": "fix",
+                    "tag": "แก้ไข Class 'ZipArchive' not found ในระบบสำรองและนำเข้าข้อมูล",
+                    "color": "danger",
+                    "icon": "bx-archive",
+                    "description": "ปรับปรุงระบบสำรองข้อมูล (backup_engine.php) และระบบนำเข้า Statement ให้ตรวจสอบความพร้อมของโมดูล ZipArchive อัตโนมัติ พร้อมเพิ่มระบบ Fallback บีบอัด/แตกไฟล์ด้วยคำสั่งระบบของ Windows/Linux หรือบันทึกเป็นไฟล์ .sql โดยตรง ป้องกัน Fatal error เมื่อเซิร์ฟเวอร์ยังไม่ได้เปิด php_zip"
+                },
+                {
                     "category": "feature",
                     "tag": "ส่งออก Excel ตามกลุ่มย่อย CR/SSS ตรงตามจำนวนที่แสดงจริง พร้อมตั้งชื่อไฟล์อัตโนมัติ",
                     "color": "success",
